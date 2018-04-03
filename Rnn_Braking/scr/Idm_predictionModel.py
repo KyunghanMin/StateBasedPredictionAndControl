@@ -5,6 +5,7 @@ Author: Kyunghan Min (kyunghah.min@gmail.com)
 Description: Prediction model for stop tendency of vehicle
 """
 #%% Import library
+import os
 import numpy as np
 import math
 import scipy.io
@@ -13,6 +14,7 @@ import sys
 import matplotlib.pyplot as plt
 import shelve
 import tensorflow as tf
+from pathlib import Path
 from keras.utils import plot_model
 from sklearn.metrics import mean_squared_error
 from keras.models import Sequential
@@ -33,18 +35,22 @@ def NormColArry(data):
         shape: [Batch size, dimension]
     Returns
     '''
+    MaxVal = np.max(np.max(data,0),0);
+    MinVal = np.min(np.min(data,0),0);
     tmpLoc_Num_NonZeroCriticValue = 1e-7;
-    tmpLoc_Arry_numerator = data - np.min(data, 0);
-    tmpLoc_Num_denominator = np.max(data, 0) - np.min(data, 0);
-    # noise term prevents the zero division
-    MaximumValue = np.max(data,0);
-    MaximumValue_LastCol = MaximumValue[-1];
-    return tmpLoc_Arry_numerator / (tmpLoc_Num_denominator + tmpLoc_Num_NonZeroCriticValue), MaximumValue_LastCol;
+    tmpLoc_Arry_numerator = data - MinVal;
+    tmpLoc_Num_denominator = MaxVal - MinVal;    
+    return tmpLoc_Arry_numerator / (tmpLoc_Num_denominator + tmpLoc_Num_NonZeroCriticValue), MaxVal, MinVal;
 #%% Import data and normalization
+cdir = os.getcwd()
+data_dir = os.chdir('../data')
+
 DataLoad = scipy.io.loadmat('TestUpData.mat');
 del DataLoad['__globals__'];del DataLoad['__header__'];del DataLoad['__version__'];
 TrainConfig_NumDataSet = DataLoad['DataLength'][0,0];
 del DataLoad['DataLength'];
+
+os.chdir(cdir)
 #%% Model configuration
 ModelConfig_NumInputSequence = 10;
 ModelConfig_NumFeature = 3;
@@ -89,14 +95,21 @@ TrainConfig_DataSetList = list(range(DataNum))
 TrainConfig_TrainSetList = TrainConfig_DataSetList[0:TrainConfig_NumTrainSet];
 TrainConfig_ValidSetList = TrainConfig_DataSetList[TrainConfig_NumTrainSet:];
 
-x_train = DataSet_X[TrainConfig_TrainSetList,:,:];
-y_train = DataSet_Y[TrainConfig_TrainSetList,:];
+[DataSet_X_Norm, DataSet_X_Max, DataSet_X_Min]= NormColArry(DataSet_X)
+[DataSet_Y_Norm, DataSet_Y_Max, DataSet_Y_Min]= NormColArry(DataSet_Y)
 
-x_valid = DataSet_X[TrainConfig_ValidSetList,:,:];
-y_valid = DataSet_Y[TrainConfig_ValidSetList,:];
+x_train = DataSet_X_Norm[TrainConfig_TrainSetList,:,:];
+y_train = DataSet_Y_Norm[TrainConfig_TrainSetList,:];
+
+x_valid = DataSet_X_Norm[TrainConfig_ValidSetList,:,:];
+y_valid = DataSet_Y_Norm[TrainConfig_ValidSetList,:];
 #%% Fit network
 
 model.fit(x_train, y_train,
-          batch_size=ModelConfig_NumBatch, epochs=5, shuffle=True,
+          batch_size=ModelConfig_NumBatch, epochs=20, shuffle=True,
           validation_data=(x_valid, y_valid))    
-    
+#%% Save model
+model.save_weights('RnnBraking_Weight')
+#%% Prediction
+y_pre = model.predict(x_valid)
+model.sa
