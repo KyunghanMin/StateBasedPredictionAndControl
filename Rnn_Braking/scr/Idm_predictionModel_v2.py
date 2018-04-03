@@ -17,7 +17,7 @@ import tensorflow as tf
 from pathlib import Path
 from keras.utils import plot_model
 from sklearn.metrics import mean_squared_error
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.layers import Dense
 from keras.layers import LSTM
 from keras import backend as K
@@ -85,10 +85,10 @@ for key in DataLoad:
 # Output layer - Softmax activation (Output size = 1)
 model = Sequential()
 model.add(LSTM(ModelConfig_NumLstmUnit, return_sequences=True,input_shape=(ModelConfig_NumInputSequence,ModelConfig_NumFeature)))
+#model.add(LSTM(ModelConfig_NumLstmUnit, return_sequences=True))
 model.add(LSTM(ModelConfig_NumLstmUnit))
 #model.add(LSTM(ModelConfig_NumLstmUnit))
-#model.add(LSTM(ModelConfig_NumLstmUnit))
-model.add(Dense(10, activation='relu'))
+model.add(Dense(1, activation='relu'))
 model.compile(loss='mse', optimizer='adam')
 #%% Training data set
 TrainConfig_TrainRatio = 0.8;
