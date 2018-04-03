@@ -53,7 +53,7 @@ del DataLoad['DataLength'];
 os.chdir(cdir)
 #%% Model configuration
 ModelConfig_NumInputSequence = 10;
-ModelConfig_NumFeature = 5;
+ModelConfig_NumFeature = 4;
 ModelConfig_NumLstmUnit = 50;
 ModelConfig_NumOutputSize = 1;
 ModelConfig_NumEpoch = 2;
@@ -64,7 +64,6 @@ DataSetNum = 1;
 # Data set arrange
 DataSet_X = np.zeros((TrainConfig_NumDataSet,ModelConfig_NumInputSequence,ModelConfig_NumFeature));
 DataSet_Y = np.zeros((TrainConfig_NumDataSet,ModelConfig_NumOutputSize));
-list_debug = np.zeros((6,254));
 
 # Slicing and cooking
 for key in DataLoad:
@@ -73,7 +72,7 @@ for key in DataLoad:
     DataSetNum = DataSetNum+1;
     DataSetNumCurr = 1;
     for index in range(0,DataSize-10):        
-        DataSet_X[DataNum,:,:] = DataCurrent[index:index+ModelConfig_NumInputSequence,0:-1]
+        DataSet_X[DataNum,:,:] = DataCurrent[index:index+ModelConfig_NumInputSequence,1:-1]
         DataSet_Y[DataNum,:] = DataCurrent[index+ModelConfig_NumInputSequence,0];
         DataNum = DataNum+1;
         DataSetNumCurr = DataSetNumCurr + 1;    
@@ -89,7 +88,7 @@ model.add(LSTM(ModelConfig_NumLstmUnit, return_sequences=True,input_shape=(Model
 model.add(LSTM(ModelConfig_NumLstmUnit))
 #model.add(LSTM(ModelConfig_NumLstmUnit))
 #model.add(LSTM(ModelConfig_NumLstmUnit))
-model.add(Dense(1, activation='relu'))
+model.add(Dense(10, activation='relu'))
 model.compile(loss='mse', optimizer='adam')
 #%% Training data set
 TrainConfig_TrainRatio = 0.8;
@@ -114,7 +113,7 @@ model.fit(x_train, y_train,
           batch_size=ModelConfig_NumBatch, epochs=20, shuffle=True,
           validation_data=(x_valid, y_valid))    
 #%% Save model
-model.save_weights('RnnBraking_Weight')
+model.save('RnnBraking')
 #%% Prediction
 y_pre = model.predict(x_valid)
 
@@ -123,50 +122,56 @@ plt.plot(y_pre);
 plt.plot(y_valid);
 plt.show()
 #%% Model validation for test case
-ValidKeyList = random.sample(DataLoad.keys(),10)
+ValidKeyList = random.sample(DataLoad.keys(),1)
 
 for i in ValidKeyList:    
 #    i = ValidKeyList[1];
-    ValidDataSet = DataLoad[i][:,0:-1];
-    ValidDataSetNorm = (ValidDataSet - DataSet_X_Min)/DataNorm_Den;
+    ValidDataSet = DataLoad[i][:,1:-1];
+    ValidDataSet_Y = DataLoad[i][:,0];
     PredictionRange = len(ValidDataSet) - ModelConfig_NumInputSequence;
-    ValidDataSet_X = np.array([ValidDataSetNorm[0:ModelConfig_NumInputSequence]])
-    PredictArry  = np.zeros([PredictionRange,ModelConfig_NumFeature])   
+    ValidDataSetCalc = np.zeros((ModelConfig_NumInputSequence,ModelConfig_NumFeature))
+    ValidDataSetCalc[:,0:2] = ValidDataSet[:ModelConfig_NumInputSequence,0:2]
+    ValidDataSetCalc[:,-1] = ValidDataSet[:ModelConfig_NumInputSequence,-1]
+    ValidDataSetCalc[:,2] = -0.5*ValidDataSetCalc[:,0]*ValidDataSetCalc[:,0]/ValidDataSetCalc[:,1]
+    ValidDataSetNorm = (ValidDataSetCalc - DataSet_X_Min)/DataNorm_Den;
+    ValidDataSet_X = np.array([ValidDataSetNorm])
+    PredictArry  = np.zeros([PredictionRange,ModelConfig_NumFeature+1])   
     for j in range(PredictionRange):
         Predict_Value = model.predict(ValidDataSet_X)
-        Predict_Acc = Predict_Value*DataNorm_Den[0] + DataSet_X_Min[0]
-        Predict_Vel = ValidDataSet_X[0,-1,1]*DataNorm_Den[1] + DataSet_X_Min[1] + Predict_Acc*0.1;
+        Predict_Acc = Predict_Value*(DataSet_Y_Max - DataSet_Y_Min) + DataSet_Y_Min
+        Predict_Vel = ValidDataSet_X[0,-1,0]*DataNorm_Den[0] + DataSet_X_Min[0] + Predict_Acc*0.1;
         if Predict_Vel <= 0.1:
             Predict_Vel = 0.1        
-        Predict_Dis = ValidDataSet_X[0,-1,2]*DataNorm_Den[2] + DataSet_X_Min[2] - Predict_Vel*0.1;
+        Predict_Dis = ValidDataSet_X[0,-1,1]*DataNorm_Den[1] + DataSet_X_Min[1] - Predict_Vel*0.1;
         if Predict_Dis <= 0.5:
             Predict_Dis = 0.5
         Predict_AccRef = -0.5*Predict_Vel*Predict_Vel/Predict_Dis;
-        Predict_Time = ValidDataSet_X[0,-1,4]*DataNorm_Den[4] + DataSet_X_Min[4] + 0.1;
-        PredictArry[j,:] = np.resize(np.array([Predict_Acc,Predict_Vel,Predict_Dis,Predict_AccRef,Predict_Time]),ModelConfig_NumFeature);
-        tmpValidSetPredNorm = (PredictArry[j,:] - DataSet_X_Min)/DataNorm_Den;
+        Predict_Time = ValidDataSet_X[0,-1,3]*DataNorm_Den[3] + DataSet_X_Min[3] + 0.1;
+        PredictArry[j,:] = np.resize(np.array([Predict_Acc,Predict_Vel,Predict_Dis,Predict_AccRef,Predict_Time]),ModelConfig_NumFeature+1);
+        tmpValidSetPredNorm = (PredictArry[j,1:] - DataSet_X_Min)/DataNorm_Den;
         ValidDataSet_X[0,0:-1,:] = ValidDataSet_X[0,1:ModelConfig_NumInputSequence,:];
         ValidDataSet_X[:,-1] = np.array([[tmpValidSetPredNorm]])
 
 #%% Plot prediction result
 plt.close("all")
-tmpAccRef = -0.5*ValidDataSet[ModelConfig_NumInputSequence:-1,1]*ValidDataSet[ModelConfig_NumInputSequence:-1,1]/(ValidDataSet[ModelConfig_NumInputSequence:-1,2] + 0.5);
+#tmpAccRef = -0.5*ValidDataSet[ModelConfig_NumInputSequence:-1,0]*ValidDataSet[ModelConfig_NumInputSequence:-1,0]/(ValidDataSet[ModelConfig_NumInputSequence-1:0,1] + 0.5);
 plt.figure(1)        
-plt.plot(PredictArry[:,0])    
-plt.plot(PredictArry[:,3])
-plt.plot(tmpAccRef)
-plt.plot(ValidDataSet[ModelConfig_NumInputSequence:-1,0])
-plt.plot(ValidDataSet[ModelConfig_NumInputSequence:-1,3])
+plt.plot(PredictArry[:,0], label = 'AccPredic')    
+plt.plot(PredictArry[:,3], label = 'AccRefPredic')
+#plt.plot(tmpAccRef)
+plt.plot(ValidDataSet[ModelConfig_NumInputSequence:-1,2], label = 'AccRef')
+plt.plot(ValidDataSet_Y[ModelConfig_NumInputSequence:-1], label = 'Acc')
+plt.legend()
 plt.show()
 
 
 plt.figure(2)        
 plt.plot(PredictArry[:,1])    
-plt.plot(ValidDataSet[ModelConfig_NumInputSequence:-1,1])
+plt.plot(ValidDataSet[ModelConfig_NumInputSequence:-1,0])
 plt.show()
 
 plt.figure(3)        
 plt.plot(PredictArry[:,2])    
-plt.plot(ValidDataSet[ModelConfig_NumInputSequence:-1,2])
+plt.plot(ValidDataSet[ModelConfig_NumInputSequence:-1,1])
 plt.show()
 
