@@ -95,16 +95,21 @@ TrainConfig_DataSetList = list(range(DataNum))
 TrainConfig_TrainSetList = TrainConfig_DataSetList[0:TrainConfig_NumTrainSet];
 TrainConfig_ValidSetList = TrainConfig_DataSetList[TrainConfig_NumTrainSet:];
 
-[DataSet_Acc_Norm, DataSet_Acc_Max, DataSet_Acc_Min]= NormColArry(DataSet_X[:,:,1])
+[DataSet_X_Norm, DataSet_X_Max, DataSet_X_Min]= NormColArry(DataSet_X)
+[DataSet_Y_Norm, DataSet_Y_Max, DataSet_Y_Min]= NormColArry(DataSet_Y)
 
-x_train = NormColArry(DataSet_X[TrainConfig_TrainSetList,:,:]);
-y_train = DataSet_Y[TrainConfig_TrainSetList,:];
+x_train = DataSet_X_Norm[TrainConfig_TrainSetList,:,:];
+y_train = DataSet_Y_Norm[TrainConfig_TrainSetList,:];
 
-x_valid = DataSet_X[TrainConfig_ValidSetList,:,:];
-y_valid = DataSet_Y[TrainConfig_ValidSetList,:];
+x_valid = DataSet_X_Norm[TrainConfig_ValidSetList,:,:];
+y_valid = DataSet_Y_Norm[TrainConfig_ValidSetList,:];
 #%% Fit network
 
 model.fit(x_train, y_train,
-          batch_size=ModelConfig_NumBatch, epochs=5, shuffle=True,
+          batch_size=ModelConfig_NumBatch, epochs=20, shuffle=True,
           validation_data=(x_valid, y_valid))    
-#%%
+#%% Save model
+model.save_weights('RnnBraking_Weight')
+#%% Prediction
+y_pre = model.predict(x_valid)
+model.sa
