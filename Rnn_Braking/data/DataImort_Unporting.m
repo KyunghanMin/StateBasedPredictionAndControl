@@ -3,8 +3,9 @@ DriverSet = {'KH','YK','GB'};
 ModelConfig_Sequence = 10;
 k = 1;
 DataLength = 0;
+xx_flag = 0;
 for j=1:3
-    filename = ['Data_' char(DriverSet(j)) '.mat'];
+    filename = ['Data_' char(DriverSet(j)) '_Rnn.mat'];
     load(filename)
     
     for i=1:DataCoast.CoastNum
@@ -17,10 +18,20 @@ for j=1:3
         tmpData_Acc = tmpData_Form(:,1);
         tmpData_Vel = tmpData_Form(:,4);
         tmpData_Dis = tmpData_Form(:,17);
+        tmpData_AccRef = tmpData_Form(:,18);
+        tmpData_Time = tmpData_Form(:,19);
         tmpData_Acc(end:endpoint) = tmpData_Acc(end);
         tmpData_Vel(end:endpoint) = tmpData_Vel(end);
         tmpData_Dis(end:endpoint) = tmpData_Dis(end);    
-        tmpDataReArry = [tmpData_Acc(1:end-1)  tmpData_Vel(1:end-1)  tmpData_Dis(1:end-1)  tmpData_Acc(2:end)];
+        tmpData_AccRef(end:endpoint) = tmpData_AccRef(end);
+        if isnan(tmpData_AccRef)
+            xx_flag = 1;
+        end
+        if isinf(tmpData_AccRef)
+            xx_flag = 1;
+        end
+        tmpData_Time(end:endpoint) = tmpData_Time(end);
+        tmpDataReArry = [tmpData_Acc(1:end-1)  tmpData_Vel(1:end-1)  tmpData_Dis(1:end-1) tmpData_AccRef(1:end-1) tmpData_Time(1:end-1) tmpData_Acc(2:end)];
         tmpDataSetLeng = endpoint-ModelConfig_Sequence;
         DataLength = DataLength + tmpDataSetLeng-1;
         DataLengthArry(k) = tmpDataSetLeng;
