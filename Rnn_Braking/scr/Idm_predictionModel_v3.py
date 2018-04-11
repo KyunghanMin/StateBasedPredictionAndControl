@@ -53,11 +53,11 @@ del DataLoad['DataLength'];
 os.chdir(cdir)
 #%% Model configuration
 ModelConfig_NumInputSequence = 10;
-ModelConfig_NumFeature = 5;
+ModelConfig_NumFeature = 4;
 ModelConfig_NumLstmUnit = 50;
 ModelConfig_NumOutputSize = 1;
 ModelConfig_NumEpoch = 2;
-ModelConfig_NumBatch = 20;
+ModelConfig_NumBatch = 50;
 #%% Data arrange
 DataNum = 0;
 DataSetNum = 1;
@@ -73,16 +73,14 @@ for key in DataLoad:
     DataSetNum = DataSetNum+1;
     DataSetNumCurr = 1;
     for index in range(0,DataSize-10):        
-        DataSet_X_Buff[DataNum,:,:] = DataCurrent[index:index+ModelConfig_NumInputSequence,:-1]
+        DataSet_X[DataNum,:,:] = DataCurrent[index:index+ModelConfig_NumInputSequence,1:-1]
         DataSet_Y[DataNum,:] = DataCurrent[index+ModelConfig_NumInputSequence,0];
         DataNum = DataNum+1;
         DataSetNumCurr = DataSetNumCurr + 1;    
 
-DataSet_X = DataSet_X_Buff;    
-DataSet_X[:,:,0] = DataSet_X_Buff[:,:,0] - DataSet_X_Buff[:,:,3];
 #%% Design model
 # Model structure - Reccurent neural network
-# Input layer - LSTM (Output size = 100, Input size = (10,5))
+# Input layer - LSTM (Output size = 100, Input size = (10,4))
 #             - 1 second sequential data
 #             - Inputs: Acceleration, Velocity, Distance
 # Hidden layer - LSTM (Output size = 50)
@@ -117,7 +115,7 @@ model.fit(x_train, y_train,
           batch_size=ModelConfig_NumBatch, epochs=20, shuffle=True,
           validation_data=(x_valid, y_valid))    
 #%% Save model
-model.save('RnnBraking')
+model.save('RnnBraking_4dim')
 #%% Prediction
 y_pre = model.predict(x_valid)
 
@@ -131,18 +129,15 @@ ValidKeyList = random.sample(DataLoad.keys(),1)
 for i in ValidKeyList:    
 #    i = ValidKeyList[1];
     # Load validation case
-    ValidDataSet = DataLoad[i][:,:-1];
+    ValidDataSet = DataLoad[i][:,1:-1];
     ValidDataSet_Y = DataLoad[i][:,0];
     # Set the prediction range (time - input sequence time)
     PredictionRange = len(ValidDataSet) - ModelConfig_NumInputSequence;
     ValidDataSetCalc = np.zeros((ModelConfig_NumInputSequence,ModelConfig_NumFeature))
     # Set the first input (input_sequence, input_feature)
-    ValidDataSetCalc[:,0:3] = ValidDataSet[:ModelConfig_NumInputSequence,0:3]
-    ValidDataSetCalc[:,-1] = ValidDataSet[:ModelConfig_NumInputSequence,-1]
+    ValidDataSetCalc[:,0:3] = ValidDataSet[:ModelConfig_NumInputSequence,0:3]    
         # Calculate reference acceleration
-    ValidDataSetCalc[:,3] = -0.5*ValidDataSetCalc[:,1]*ValidDataSetCalc[:,1]/ValidDataSetCalc[:,2]
-        # Calculate acceleration difference
-    ValidDataSetCalc[:,0] = ValidDataSetCalc[:,0] - ValidDataSetCalc[:,3]
+    ValidDataSetCalc[:,2] = -0.5*ValidDataSetCalc[:,0]*ValidDataSetCalc[:,0]/ValidDataSetCalc[:,1]    
     # Normalize sequence data
     ValidDataSetNorm = (ValidDataSetCalc - DataSet_X_Min)/DataNorm_Den
     ValidDataSet_X = np.array([ValidDataSetNorm])
@@ -153,28 +148,36 @@ for i in ValidKeyList:
         Predict_Value = model.predict(ValidDataSet_X)
         Predict_Acc = Predict_Value*(DataSet_Y_Max - DataSet_Y_Min) + DataSet_Y_Min
         # Calculate next input variables
-            # Predicted velocity [1]
-        Predict_Vel = ValidDataSet_X[0,-1,1]*DataNorm_Den[1] + DataSet_X_Min[1] + Predict_Acc*0.1;
+            # Predicted velocity [0]
+        Predict_Vel = ValidDataSet_X[0,-1,0]*DataNorm_Den[0] + DataSet_X_Min[0] + Predict_Acc*0.1;
         if Predict_Vel <= 0.1:
             Predict_Vel = 0.1        
-            # Predicted distance [2]
-        Predict_Dis = ValidDataSet_X[0,-1,2]*DataNorm_Den[2] + DataSet_X_Min[2] - Predict_Vel*0.1;
+            # Predicted distance [1]
+        Predict_Dis = ValidDataSet_X[0,-1,1]*DataNorm_Den[1] + DataSet_X_Min[1] - Predict_Vel*0.1;
         if Predict_Dis <= 0.5:
             Predict_Dis = 0.5
-            # Predicted reference acceleration [3]
-        Predict_AccRef = -0.5*Predict_Vel*Predict_Vel/Predict_Dis;
-            # Predicted acceleration difference [0]
-        Predict_AccDiff = Predict_Acc - Predict_AccRef
-            # Process time [4]
-        Predict_Time = ValidDataSet_X[0,-1,4]*DataNorm_Den[4] + DataSet_X_Min[4] + 0.1;
+            # Predicted reference acceleration [2]
+        Predict_AccRef = -0.5*Predict_Vel*Predict_Vel/Predict_Dis;        
+            # Process time [3]
+        Predict_Time = ValidDataSet_X[0,-1,3]*DataNorm_Den[3] + DataSet_X_Min[3] + 0.1;
         # Storage predicted results
         PredictArry[j,:] = np.resize(np.array([Predict_Acc,Predict_Vel,Predict_Dis,Predict_AccRef,Predict_Time]),ModelConfig_NumFeature+1);
         # Arrange model input using predicted results
-        tmpValidSetPred = np.array([Predict_AccDiff,Predict_Vel,Predict_Dis,Predict_AccRef,Predict_Time])
+        tmpValidSetPred = np.array([Predict_Vel,Predict_Dis,Predict_AccRef,Predict_Time])
         tmpValidSetPredNorm = (tmpValidSetPred - DataSet_X_Min)/DataNorm_Den;
         ValidDataSet_X[0,0:-1,:] = ValidDataSet_X[0,1:ModelConfig_NumInputSequence,:];
         ValidDataSet_X[:,-1] = np.array([[tmpValidSetPredNorm]])
 
+plt.close("all")
+#tmpAccRef = -0.5*ValidDataSet[ModelConfig_NumInputSequence:-1,0]*ValidDataSet[ModelConfig_NumInputSequence:-1,0]/(ValidDataSet[ModelConfig_NumInputSequence-1:0,1] + 0.5);
+plt.figure(1)        
+plt.plot(PredictArry[:,0], label = 'AccPredic')    
+plt.plot(PredictArry[:,3], label = 'AccRefPredic')
+#plt.plot(tmpAccRef)
+plt.plot(ValidDataSet[ModelConfig_NumInputSequence:-1,2], label = 'AccRef')
+plt.plot(ValidDataSet_Y[ModelConfig_NumInputSequence:-1], label = 'Acc')
+plt.legend()
+plt.show()
 #%% Plot prediction result
 plt.close("all")
 #tmpAccRef = -0.5*ValidDataSet[ModelConfig_NumInputSequence:-1,0]*ValidDataSet[ModelConfig_NumInputSequence:-1,0]/(ValidDataSet[ModelConfig_NumInputSequence-1:0,1] + 0.5);

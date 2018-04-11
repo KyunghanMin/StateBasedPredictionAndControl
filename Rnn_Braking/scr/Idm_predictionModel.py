@@ -22,8 +22,6 @@ from keras.layers import Dense
 from keras.layers import LSTM
 from keras import backend as K
 
-#%% Initialization Keras session
-K.clear_session()
 
 #%% Declare local function
 def NormColArry(data):
@@ -54,7 +52,7 @@ os.chdir(cdir)
 #%% Model configuration
 ModelConfig_NumInputSequence = 10;
 ModelConfig_NumFeature = 5;
-ModelConfig_NumLstmUnit = 50;
+ModelConfig_NumLstmUnit = 100;
 ModelConfig_NumOutputSize = 1;
 ModelConfig_NumEpoch = 2;
 ModelConfig_NumBatch = 50;
@@ -63,6 +61,7 @@ DataNum = 0;
 DataSetNum = 1;
 # Data set arrange
 DataSet_X = np.zeros((TrainConfig_NumDataSet,ModelConfig_NumInputSequence,ModelConfig_NumFeature));
+DataSet_X_Buff = np.zeros((TrainConfig_NumDataSet,ModelConfig_NumInputSequence,ModelConfig_NumFeature));
 DataSet_Y = np.zeros((TrainConfig_NumDataSet,ModelConfig_NumOutputSize));
 list_debug = np.zeros((6,254));
 
@@ -73,10 +72,15 @@ for key in DataLoad:
     DataSetNum = DataSetNum+1;
     DataSetNumCurr = 1;
     for index in range(0,DataSize-10):        
-        DataSet_X[DataNum,:,:] = DataCurrent[index:index+ModelConfig_NumInputSequence,0:-1]
+        DataSet_X_Buff[DataNum,:,:] = DataCurrent[index:index+ModelConfig_NumInputSequence,0:-1]                
         DataSet_Y[DataNum,:] = DataCurrent[index+ModelConfig_NumInputSequence,0];
         DataNum = DataNum+1;
-        DataSetNumCurr = DataSetNumCurr + 1;    
+        DataSetNumCurr = DataSetNumCurr + 1;
+DataSet_X = DataSet_X_Buff;
+DataSet_X[:,:,3] = DataSet_X_Buff[:,:,0] - DataSet_X_Buff[:,:,3]
+        
+#%% Initialization Keras session
+K.clear_session()
 #%% Design model
 # Model structure - Reccurent neural network
 # Input layer - LSTM (Output size = 100, Input size = (10,5))
@@ -109,7 +113,6 @@ y_train = DataSet_Y_Norm[TrainConfig_TrainSetList,:];
 x_valid = DataSet_X_Norm[TrainConfig_ValidSetList,:,:];
 y_valid = DataSet_Y_Norm[TrainConfig_ValidSetList,:];
 #%% Fit network
-
 model.fit(x_train, y_train,
           batch_size=ModelConfig_NumBatch, epochs=20, shuffle=True,
           validation_data=(x_valid, y_valid))    
