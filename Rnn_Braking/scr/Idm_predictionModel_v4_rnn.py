@@ -4,6 +4,15 @@ Data: 2018.03.20
 Author: Kyunghan Min (kyunghah.min@gmail.com)
 Description: Prediction model for stop tendency of vehicle
 """
+
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Apr 16 08:43:53 2018
+
+@author: Kyunghan (kyunghah.min@gmail.com)
+
+Description: Prediction model for stop tendency of vehicle
+"""
 #%% Import library
 import os
 import numpy as np
@@ -74,6 +83,11 @@ for key in DataLoad:
         DataNum = DataNum+1;
         DataSetNumCurr = DataSetNumCurr + 1;    
 
+# Driver information
+DataDriver= {'DriverList':['Kyunghan','Kyuhwan','Gyubin']};
+DataDriver.update({'DriverIndex':np.concatenate((1*np.ones(103),2*np.ones(100),3*np.ones(94)))})
+       
+
 #%% Design model
 # Model structure - Reccurent neural network +  MLP
 # Input layer - LSTM (Output size = 100, Input size = (10,4))
@@ -114,9 +128,12 @@ x_valid = DataSet_X_Norm[TrainConfig_ValidSetList,:,:];
 y_valid = DataSet_Y_Norm[TrainConfig_ValidSetList,:];
 #%% Fit network
 
-fit_history = model.fit(x_train, y_train,
-                        batch_size=ModelConfig_NumBatch, epochs=20, shuffle=True,
-                        validation_data=(x_valid, y_valid))    
+#fit_history = model.fit(x_train, y_train,
+#                        batch_size=ModelConfig_NumBatch, epochs=20, shuffle=True,
+#                        validation_data=(x_valid, y_valid))    
+#%% Save model
+#model.save('RnnBraking_4dim_SimpleRNN_TwoMLP')
+model = load_model('RnnBraking_4dim_SimpleRNN_TwoMLP')
 #%% Determine intermediate model
 layer_name = 'dense_1'
 model_dense1 = Model(inputs=model.input,
@@ -127,8 +144,7 @@ layer_name_rnn = 'simple_rnn_1'
 model_rnn = Model(inputs=model.input,
                                  outputs=model.get_layer(layer_name_rnn).output)
 print(model_rnn.summary())
-#%% Save model
-model.save('RnnBraking_4dim_SimpleRNN_TwoMLP')
+
 #%% Prediction
 y_pre = model.predict(x_valid)
 
@@ -137,11 +153,13 @@ plt.plot(y_pre);
 plt.plot(y_valid);
 plt.show()
 #%% Model validation for test case
-ValidKeyList = random.sample(DataLoad.keys(),1)
-
+#ValidKeyList = random.sample(DataLoad.keys(),50)
+ValidKeyList = DataLoad.keys()
+ResultList = []
 for i in ValidKeyList:    
 #    i = ValidKeyList[1];
     # Load validation case
+    CaseIndex = int(i[8:])
     ValidDataSet = DataLoad[i][:,1:-1];
     ValidDataSet_Y = DataLoad[i][:,0];
     # Set the prediction range (time - input sequence time)
@@ -162,9 +180,10 @@ for i in ValidKeyList:
         # Calculate predicted acceleration
         Predict_Value = model.predict(ValidDataSet_X)
         Predict_Value_Rnn = model_rnn.predict(ValidDataSet_X)
+        Predict_Value_Dense1 = model_dense1.predict(ValidDataSet_X)
+
         PredictArry_State[j,:] = np.reshape(Predict_Value_Rnn[0,-1,:],(1,10))
         PredictArry_Sequence[j,:] = np.reshape(Predict_Value_Dense1,(1,10))
-        Predict_Value_Dense1 = model_dense1.predict(ValidDataSet_X)
         Predict_Acc = Predict_Value*(DataSet_Y_Max - DataSet_Y_Min) + DataSet_Y_Min
         # Calculate next input variables
             # Predicted velocity [0]
@@ -186,9 +205,16 @@ for i in ValidKeyList:
         tmpValidSetPredNorm = (tmpValidSetPred - DataSet_X_Min)/DataNorm_Den;
         ValidDataSet_X[0,0:-1,:] = ValidDataSet_X[0,1:ModelConfig_NumInputSequence,:];
         ValidDataSet_X[:,-1] = np.array([[tmpValidSetPredNorm]])
+    # Save result
+#    Driver = DataDriver['DriverList'][int(DataDriver['DriverIndex'][CaseIndex-1])-1]
+    Driver = np.array([DataDriver['DriverIndex'][CaseIndex-1]])
+    PredictData = [Driver,PredictArry,PredictArry_State,PredictArry_Sequence,ValidDataSet]
+    ResultList.append(PredictData)
 
+mdic = {'Data':ResultList}
+io.savemat('PredictResult',mdic)
+#%% Plot validationresults
 plt.close("all")
-#tmpAccRef = -0.5*ValidDataSet[ModelConfig_NumInputSequence:-1,0]*ValidDataSet[ModelConfig_NumInputSequence:-1,0]/(ValidDataSet[ModelConfig_NumInputSequence-1:0,1] + 0.5);
 plt.figure(1)        
 plt.plot(PredictArry[:,0], label = 'AccPredic')    
 plt.plot(PredictArry[:,3], label = 'AccRefPredic')
@@ -206,26 +232,3 @@ plt.figure(3)
 plt.plot(PredictArry_State, label = 'State')
 plt.legend()
 plt.show()
-#%% Plot prediction result
-plt.close("all")
-#tmpAccRef = -0.5*ValidDataSet[ModelConfig_NumInputSequence:-1,0]*ValidDataSet[ModelConfig_NumInputSequence:-1,0]/(ValidDataSet[ModelConfig_NumInputSequence-1:0,1] + 0.5);
-plt.figure(1)        
-plt.plot(PredictArry[:,0], label = 'AccPredic')    
-plt.plot(PredictArry[:,3], label = 'AccRefPredic')
-#plt.plot(tmpAccRef)
-plt.plot(ValidDataSet[ModelConfig_NumInputSequence:-1,2], label = 'AccRef')
-plt.plot(ValidDataSet_Y[ModelConfig_NumInputSequence:-1], label = 'Acc')
-plt.legend()
-plt.show()
-
-#%%
-plt.figure(2)        
-plt.plot(PredictArry[:,1])    
-plt.plot(ValidDataSet[ModelConfig_NumInputSequence:-1,0])
-plt.show()
-
-plt.figure(3)        
-plt.plot(PredictArry[:,2])    
-plt.plot(ValidDataSet[ModelConfig_NumInputSequence:-1,1])
-plt.show()
-
