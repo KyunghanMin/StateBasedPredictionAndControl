@@ -208,7 +208,7 @@ for i in ValidKeyList:
     # Save result
 #    Driver = DataDriver['DriverList'][int(DataDriver['DriverIndex'][CaseIndex-1])-1]
     Driver = np.array([DataDriver['DriverIndex'][CaseIndex-1]])
-    PredictData = [Driver,PredictArry,PredictArry_State,PredictArry_Sequence,ValidDataSet]
+    PredictData = [Driver,PredictArry,PredictArry_State,PredictArry_Sequence,DataLoad[i]]
     ResultList.append(PredictData)
 
 mdic = {'Data':ResultList}
