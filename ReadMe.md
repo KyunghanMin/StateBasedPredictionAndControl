@@ -26,7 +26,7 @@ Algorithm
 * Recurrent neural network (deep-learning)
 * Driver classification
 
-#### SbPaC_Decel
+#### ParModel_Decel
 
 * Frame work of deceleration prediction algorithm
   * Parametric driver model
