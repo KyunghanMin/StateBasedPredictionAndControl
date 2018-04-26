@@ -100,7 +100,12 @@ OnlineConfig.CoastCond.Gas = 5;
 
 OnlineConfig.CoastingIndexSize = 2000;
 
-save('ModelConfig.mat','ModelConfig','OnlineConfig','LrnConfig','-append')
+if (exist('ModelConfig.mat') == 2)
+    save('ModelConfig.mat','ModelConfig','OnlineConfig','LrnConfig','-append')    
+else
+    save('ModelConfig.mat','ModelConfig','OnlineConfig','LrnConfig')
+end
+    
 
 %% Coasting determination and reference velocity calculation
 DriverSet = {'KH','YK','GB'};
@@ -332,5 +337,14 @@ BaseMap_MinAcc_Data = fitresult(BaseMap_MinAcc_Index);
 BaseMap_MaxAcc_Data = -BaseMap_MinAcc_Data;
 BaseMap_AdjGain_Data = 0.01*ones(8,1);
 
-save('IdmParam.mat','BaseMap_*','-append');
-save('IdmParam_Integ.mat','BaseMap_*','-append');
+if (exist('IdmParam.mat') == 2)
+    save('IdmParam.mat','BaseMap_*','-append');
+else
+    save('IdmParam.mat','BaseMap_*');
+end
+
+if (exist('IdmParam_Integ.mat') == 2)
+    save('IdmParam_Integ.mat','BaseMap_*','-append');
+else
+    save('IdmParam_Integ.mat','BaseMap_*');
+end    
