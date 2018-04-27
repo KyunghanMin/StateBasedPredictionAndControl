@@ -8,9 +8,9 @@ close all;
 %% Load B_spline road model & Vehicle driving data
 % load('../004_Data/CarmakerLogging/0317/RoadMdl/CM_RdlMdl_Ang30.mat') % RoadModel
 % Dataset = load('../004_Data/CarmakerLogging/0317/CM_CANformat_Ang30.mat'); % Vehicle driving data
-
-load('../004_Data/CarmakerLogging/0317/RoadMdl/CM_RdlMdl_Ang30_v120.mat') % RoadModel
-Dataset = load('../004_Data/CarmakerLogging/0317/CM_CANformat_Ang30_v120.mat'); % Vehicle driving data
+ColorCode();
+load('../003_Data/RoadMdl/CM_RdlMdl_Ang30_v120.mat') % RoadModel
+Dataset = load('../003_Data/DrivingData/CM_CANformat_Ang30_v120.mat'); % Vehicle driving data
 %% 1. Data Preprocess
 %%    1.1 Vehicle Data
 %%      1.1.1 Filtering Steering angle
@@ -213,11 +213,11 @@ plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./flt_radius,'black','linewidth',2);
 hold on;
 plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./HC_flt_radius,'g*','linewidth',4);
 hold off;
-title('Steering Angle');
+title('1/Radius');
 grid on;
 % ylim([0,200]);
 xlabel('Roadway position [m]');
-ylabel('Steering Angle [degree]');
+ylabel('1/Radius [1/m]');
 %%      [Plot 3] Curvature VS 1/Radius
 figure(3)
 set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.95]);
