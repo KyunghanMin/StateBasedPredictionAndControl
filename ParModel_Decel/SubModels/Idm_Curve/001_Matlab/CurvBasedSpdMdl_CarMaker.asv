@@ -614,8 +614,7 @@ end
 %%
 pltIndxRoad = 1 : length(flt_curvature);
 pltIndxRoad = Sampling*pltIndxRoad;
-% xlimIndex=[4850,5300];
-xlimIndex=[1800,2200];
+xlimIndex=[4850,5300];
 figure(15)
 set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.95]);
 subplot(3,1,1)
@@ -639,7 +638,7 @@ plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./flt_radius,'color',CP(26,:),'linewi
 % hold on;
 % plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./HC_flt_radius,'g*','linewidth',4);
 % hold off;
-title('Curvature');
+title('Curva');
 grid on;
 % ylim([0,200]);
 xlabel('Roadway position [m]');
