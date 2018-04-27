@@ -9,6 +9,19 @@ conda environment activation 후,
 conda install -c kyunghan lib_sbpac
 ```
 
+## 사용방법
+spyder에서
+```python
+*Import module*
+import lib_sbpac
+
+*Load color set*
+colorset_variable = lib_sbpac.color_code.get_ColorSet()
+
+*Display color set*
+lib_sbpac.color_code.dis_ColorSet()
+```
+
 ## Description
 
 Version: 0.0.9
