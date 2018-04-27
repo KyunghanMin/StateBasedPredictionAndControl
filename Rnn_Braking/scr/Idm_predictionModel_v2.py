@@ -22,6 +22,7 @@ from keras.layers import Dense
 from keras.layers import LSTM
 from keras import backend as K
 
+import lib_sbpac
 #%% Initialization Keras session
 K.clear_session()
 
