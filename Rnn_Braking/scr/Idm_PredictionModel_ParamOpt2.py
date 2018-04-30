@@ -138,7 +138,7 @@ def objective(params):
     
 #    history_model = model.fit(x_train, y_train, epochs=40, batch_size=OptParam_BatchSize,validation_data=(x_valid, y_valid), verbose=0, shuffle=False)    
     history_model = model.fit(x_train, y_train,
-                              batch_size=OptParam_BatchSize, epochs=30, shuffle=True,
+                              batch_size=OptParam_BatchSize, epochs=15, shuffle=True,
                               validation_data=(x_valid, y_valid)) 
     score=history_model.history['val_loss'][-1]
     print(' --->  MSE: ', score)        
@@ -150,7 +150,7 @@ def objective(params):
     print('Elapsed time: ', end-start)
     return {'loss': score, 'status': STATUS_OK}
 #%% Optimize
-TPE_Iteration = 50
+TPE_Iteration = 250
 ##########################################################################################################
 trials = Trials()
 best = fmin(objective, space, algo=tpe.suggest, trials=trials, max_evals=TPE_Iteration) #algo=tpe.suggest,rand.suggest
