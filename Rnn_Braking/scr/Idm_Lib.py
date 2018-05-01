@@ -52,14 +52,14 @@ def CorCalc(vec_1,vec_2):
 def Clu_2ndPoly(x_val,y_val,Cluster):
     y_set = np.array(Cluster['MaxAccSet'])
     x_set = np.array(Cluster['MaxPntSet'])
-    tmpCluY = -y_set/x_set/x_set*x_val*x_val+y_set
-    if y_val <= tmpCluY[0]:
-        CluIndex = 0
-    elif y_val <= tmpCluY[1]:
+    CluVal = -y_set/x_set/x_set*x_val*x_val+y_set
+    if y_val <= CluVal[0]:
         CluIndex = 1
-    else:
+    elif y_val <= CluVal[1]:
         CluIndex = 2
-    return CluIndex
+    else:
+        CluIndex = 3            
+    return CluIndex, CluVal
 #%%
 #cdir = os.getcwd()
 #data_dir = os.chdir('../data')
