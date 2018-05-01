@@ -142,7 +142,7 @@ def objective(params):
    
 #    history_model = model.fit(x_train, y_train, epochs=40, batch_size=OptParam_BatchSize,validation_data=(x_valid, y_valid), verbose=0, shuffle=False)    
     history_model = model.fit(x_train, y_train,
-                              batch_size=OptParam_BatchSize, epochs=30, shuffle=True,
+                              batch_size=OptParam_BatchSize, epochs=15, shuffle=True,
                               validation_data=(x_valid, y_valid))
     lstModelHistory.append(history_model)
     score=history_model.history['val_loss'][-1]
@@ -155,21 +155,24 @@ def objective(params):
     print('Elapsed time: ', end-start)
     return {'loss': score, 'status': STATUS_OK}
 #%% Optimize
-TPE_Iteration = 50
+TPE_Iteration = 250
 ##########################################################################################################
 trials = Trials()
 best = fmin(objective, space, algo=tpe.suggest, trials=trials, max_evals=TPE_Iteration) #algo=tpe.suggest,rand.suggest
 #################################lst#########################################################################
 #%% Save history
 HyperOptHistory = {}
+HyperOptHistory['best'] = best
 DicKey = 0
+import pickle
 for models in lstModelHistory:
     KerasModelMeta = models
     print(models)
     HyperOptHistory[DicKey] = KerasModelMeta.history
     DicKey = DicKey+1
+    
 with open('HyperOpt_History.pickle','wb') as mysavedata:
-     pickle.dump(HyperOptHistory,mysavedata)
+     pickle.dump([HyperOptHistory,best],mysavedata)     
 mysavedata.close()
         
 with open('HyperOpt_History.pickle','rb') as myloaddata:
