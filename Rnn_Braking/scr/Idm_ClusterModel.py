@@ -10,6 +10,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.io as io
 import math
+import pickle
+import random
 #%% Braking data analyze
 def RefCalc(data):
     LocVel = data[:,1]
@@ -32,9 +34,11 @@ def CorCalc(vec_1,vec_2):
         CorrCoef = 0
     return CorrCoef
 #%% Load prediction result
-PredictData = io.loadmat('PredictResult.mat')
-NumSt = 10
-NumSeq = 10
+with open('PredictResult.pickle','rb') as myloaddata:
+    PredictData = pickle.load(myloaddata)
+
+NumSt = 14
+NumSeq = 12
 Param_MaxAcc = []
 Param_MaxPoint = []
 Param_Driver = []
@@ -43,13 +47,13 @@ Param_SeqResult_MaxPoint = []
 Param_SeqDiff_MaxPoint = []
 # Prediction data
 # [Predict_Acc,Predict_Vel,Predict_Dis,Predict_AccRef,Predict_Time]
-for i in range(len(PredictData['Data'])):
-    tmpData = PredictData['Data'][i,:]
-    Driver = np.asscalar(tmpData[0])
-    PredictResult = tmpData[1]
-    PredictState = tmpData[2]
-    PredictSequence = tmpData[3]
-    ValidDataSet = tmpData[4]
+for i in range(len(PredictData['Predict_Int'])):
+    tmpData = PredictData['Predict_Int'][i]
+    Driver = PredictData['Driver'][i]
+    PredictResult = tmpData[0]
+    PredictState = tmpData[1]
+    PredictSequence = tmpData[2]
+    ValidDataSet = tmpData[3]
     [tmpMaxAcc, tmpMaxPoint] = RefCalc(PredictResult)
     Param_MaxAcc.append(tmpMaxAcc)
     Param_MaxPoint.append(tmpMaxPoint)
@@ -70,6 +74,23 @@ Param_Driver = np.array(Param_Driver)
 Param_StResult_MaxPoint = np.array(Param_StResult_MaxPoint)
 Param_SeqResult_MaxPoint = np.array(Param_SeqResult_MaxPoint)
 Param_SeqDiff_MaxPoint = np.array(Param_SeqDiff_MaxPoint)
+#%% Plot one case
+index_plot = random.choice(range(297))
+
+PredictResult = PredictData['Predict_Int'][index_plot][0]
+ValidationResult = PredictData['Predict_Int'][index_plot][3][NumSeq:,:]
+AccEstClu = PredictData['Predict_Clu'][index_plot][0][:,0]
+AccEst = PredictData['Predict_Int'][index_plot][0][:,0]
+AccRef = PredictData['Predict_Int'][index_plot][3][NumSeq:,0]
+[tmpMaxAcc, tmpMaxPoint] = RefCalc(ValidationResult)
+plt.figure()
+plt.plot(AccEst,label='Prediction')
+plt.plot(AccEstClu,label='Prediction_ClusterModel')
+plt.plot(AccRef,label='Reference')
+plt.plot(tmpMaxPoint,AccRef[tmpMaxPoint],'o')
+plt.legend()
+
+
 #%% Clustering depending on drivers
 DriverSet = [1,2,3]
 Param_DriverIndexLst = []

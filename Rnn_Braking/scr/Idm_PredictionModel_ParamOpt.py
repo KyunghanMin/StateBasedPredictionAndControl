@@ -160,20 +160,14 @@ TPE_Iteration = 250
 trials = Trials()
 best = fmin(objective, space, algo=tpe.suggest, trials=trials, max_evals=TPE_Iteration) #algo=tpe.suggest,rand.suggest
 #################################lst#########################################################################
-#%% Save history
-HyperOptHistory = {}
-HyperOptHistory['best'] = best
-DicKey = 0
+#%% Save result
 import pickle
-for models in lstModelHistory:
-    KerasModelMeta = models
-    print(models)
-    HyperOptHistory[DicKey] = KerasModelMeta.history
-    DicKey = DicKey+1
+#for models in lstModelHistory:
+#    KerasModelMeta = models
+#    print(models)
+#    HyperOptHistory[DicKey] = KerasModelMeta.history
+#    DicKey = DicKey+1
     
 with open('HyperOpt_History.pickle','wb') as mysavedata:
-     pickle.dump([HyperOptHistory,best],mysavedata)     
+     pickle.dump([HyperOptHistory,best,OptParam],mysavedata)     
 mysavedata.close()
-        
-with open('HyperOpt_History.pickle','rb') as myloaddata:
-    xxxxxx = pickle.load(myloaddata)
