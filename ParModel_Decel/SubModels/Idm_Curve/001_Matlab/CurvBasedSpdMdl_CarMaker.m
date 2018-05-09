@@ -35,7 +35,7 @@ Totallength = (Dataset.RoadLength(end));
 Totallength = round(Totallength/10);
 Totallength = 10*Totallength;
 limit = Totallength; % 5100m (without traffic right), 7300m (Whole Track)
-Sampling = 1; %10m
+Sampling = 5; %10m
 
 ExpandRange = 200000;
 ExpolatedRange = linspace(0,1,ExpandRange);
@@ -47,6 +47,7 @@ Ego_Accel = single(InterPolatedData(Roadway,  Dataset.LONG_ACCEL(:,end)));
 Location = Roadway;
 SteeringAg =  single(InterPolatedData(Roadway, Temp_StrAngFlt(:,end)));
 Lat_Accel =  single(InterPolatedData(Roadway, Dataset.LAT_ACCEL(:,end)));
+Time = single(InterPolatedData(Roadway, Dataset.Time(:,end)));
 % %% Flatten coordinate (Flatten Earth)
 % Lat = Dataset.sig_State_Lat(:,end);
 % Long = Dataset.sig_State_Lon(:,end);
@@ -88,7 +89,7 @@ sn_Location = single(zeros(1,sn_MaxRoadPos));
 sn_Aps = single(zeros(1,sn_MaxRoadPos));
 sn_SteeringAg= single(zeros(1,sn_MaxRoadPos));
 sn_Lat_Accel= single(zeros(1,sn_MaxRoadPos));
-
+sn_Time = single(zeros(1,sn_MaxRoadPos));
 % sn_X = single(zeros(1,sn_MaxRoadPos));
 % sn_Y = single(zeros(1,sn_MaxRoadPos));
 % sn_Z = single(zeros(1,sn_MaxRoadPos));
@@ -108,6 +109,7 @@ for j = 1 : length(Roadway)
             sn_Location(count) = Location(j);
             sn_SteeringAg(count) =SteeringAg(j);
             sn_Lat_Accel(count) = Lat_Accel(j);
+            sn_Time(count) = Time(j);
         end
     end
 end
@@ -174,7 +176,7 @@ HC_sn_SteeringAngle = sn_SteeringAg;
 HC_sn_SteeringAngle(flt_curvature<CurveStandard)=NaN;
 HC_flt_radius = flt_radius;
 HC_flt_radius(1./flt_radius<CurveStandard)=NaN;
-figure(1)
+figure(99)
 set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.95]);
 plot(sn_X,sn_Y,'black','linewidth',2);
 hold on;
@@ -194,7 +196,7 @@ set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.95]);
 subplot(3,1,1)
 plot(pltIndxRoad,flt_curvature,'black','linewidth',2);
 hold on;
-plot(pltIndxRoad,HC_Curvature,'g*','linewidth',4);
+plot(pltIndxRoad,HC_Curvature,'g*','linewidth',0.5);
 hold off;
 title('Curvature');
 grid on;
@@ -204,7 +206,7 @@ ylabel('Curvature [1/m]');
 subplot(3,1,2)
 plot(pltIndxRoad,sn_Ego_Velocity,'black','linewidth',2);
 hold on;
-plot(pltIndxRoad,HC_sn_Ego_Velocity,'g*','linewidth',4);
+plot(pltIndxRoad,HC_sn_Ego_Velocity,'g*','linewidth',0.5);
 hold off;
 title('Speed');
 grid on;
@@ -214,7 +216,7 @@ ylabel('Speed [km/h]');
 subplot(3,1,3)
 plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./flt_radius,'black','linewidth',2);
 hold on;
-plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./HC_flt_radius,'g*','linewidth',4);
+plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./HC_flt_radius,'g*','linewidth',0.5);
 hold off;
 title('1/Radius');
 grid on;
@@ -614,34 +616,171 @@ end
 %%
 pltIndxRoad = 1 : length(flt_curvature);
 pltIndxRoad = Sampling*pltIndxRoad;
-% xlimIndex=[4850,5300];
-xlimIndex=[1800,2200];
+xlimIndex=[4850,5300];
+xlimIndex=[700,1400];
+% xlimIndex=[0,22000];
+FontSize = 13;
 figure(15)
-set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.95]);
+set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.8]);
 subplot(3,1,1)
 plot(pltIndxRoad,sn_Ego_Accel,'color',YP(9,:),'linewidth',2);
 hold on;
-title('Longituidinal Acceleration');
+title('Longitudinal Acceleration','fontsize',FontSize);
 grid on;
-xlabel('Roadway position [m]');
-ylabel('Acceleration [m/s^2]');
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('Acceleration [m/s^2]','fontsize',FontSize);
 xlim(xlimIndex);
 subplot(3,1,2)
 plot(pltIndxRoad,sn_Ego_Velocity,'color',RP(9,:),'linewidth',2);
 hold on;
-title('Speed');
+title('Speed','fontsize',FontSize);
 grid on;
-xlabel('Roadway position [m]');
-ylabel('Speed [km/h]');
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('Speed [km/h]','fontsize',FontSize);
 xlim(xlimIndex);
 subplot(3,1,3)
-plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./flt_radius,'color',CP(26,:),'linewidth',2);
+plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./Radius,'color',CP(26,:),'linewidth',2);
 % hold on;
 % plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./HC_flt_radius,'g*','linewidth',4);
 % hold off;
-title('Curvature');
+title('Curvature','fontsize',FontSize);
 grid on;
 % ylim([0,200]);
-xlabel('Roadway position [m]');
-ylabel('1/Radius [1/m]');
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('1/Radius [1/m]','fontsize',FontSize);
 xlim(xlimIndex);
+
+%%
+pltIndxRoad = 1 : length(flt_curvature);
+pltIndxRoad = Sampling*pltIndxRoad;
+xlimIndex=[700,1400];
+% xlimIndex=[3800,4200];
+% xlimIndex=[0,22000];
+FontSize = 13;
+figure(16)
+set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 0.6 0.6]);
+subplot(2,1,1)
+plot(pltIndxRoad,sn_Ego_Accel,'color',YP(9,:),'linewidth',2);
+hold on;
+title('Longitudinal Acceleration','fontsize',FontSize);
+grid on;
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('Acceleration [m/s^2]','fontsize',FontSize);
+xlim(xlimIndex);
+subplot(2,1,2)
+plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./Radius,'color',CP(26,:),'linewidth',2);
+% hold on;
+% plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./HC_flt_radius,'g*','linewidth',4);
+% hold off;
+title('Curvature','fontsize',FontSize);
+grid on;
+% ylim([0,200]);
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('1/Radius [1/m]','fontsize',FontSize);
+xlim(xlimIndex);
+%%
+pltIndxRoad = 1 : length(flt_curvature);
+pltIndxRoad = Sampling*pltIndxRoad;
+xlimIndex=[4850,5100];
+% xlimIndex=[3800,4200];
+% xlimIndex=[0,22000];
+PlotIndx = [141+200:220+200];
+FontSize = 13;
+figure(17)
+set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 0.6 0.6]);
+
+subplot(4,1,1)
+plot(sn_Time(PlotIndx),sn_Ego_Accel(PlotIndx),'color',YP(9,:),'linewidth',2);
+hold on;
+title('Longitudinal Acceleration','fontsize',FontSize);
+grid on;
+xlabel('Time [sec]','fontsize',FontSize);
+ylabel('Acceleration [m/s^2]','fontsize',FontSize);
+subplot(4,1,2)
+plot(pltIndxRoad(PlotIndx),sn_Ego_Accel(PlotIndx),'color',YP(9,:),'linewidth',2);
+hold on;
+title('Longitudinal Acceleration','fontsize',FontSize);
+grid on;
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('Acceleration [m/s^2]','fontsize',FontSize);
+
+subplot(4,1,3)
+plot(pltIndxRoad(PlotIndx),sn_Ego_Velocity(PlotIndx),'color',RP(9,:),'linewidth',2);
+hold on;
+title('Speed','fontsize',FontSize);
+grid on;
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('Speed [km/h]','fontsize',FontSize);
+
+subplot(4,1,4)
+plot(pltIndxRoad(PlotIndx+1),   1./Radius(PlotIndx),'color',CP(26,:),'linewidth',2);
+% hold on;
+% plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./HC_flt_radius,'g*','linewidth',4);
+% hold off;
+title('Curvature','fontsize',FontSize);
+grid on;
+% ylim([0,200]);
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('1/Radius [1/m]','fontsize',FontSize);
+
+%%
+pltIndxRoad = 1 : length(flt_curvature);
+pltIndxRoad = Sampling*pltIndxRoad;
+xlimIndex=[4850,5300];
+xlimIndex=[6700,7400];
+% xlimIndex=[0,22000];
+FontSize = 13;
+figure(18)
+set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.8]);
+subplot(4,1,1)
+plot(pltIndxRoad,sn_Ego_Accel,'color',YP(9,:),'linewidth',2);
+hold on;
+title('Longitudinal Acceleration','fontsize',FontSize);
+grid on;
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('Acceleration [m/s^2]','fontsize',FontSize);
+xlim(xlimIndex);
+subplot(4,1,2)
+plot(pltIndxRoad,sn_Lat_Accel,'color',YP(5,:),'linewidth',2);
+hold on;
+title('Lateral Acceleration','fontsize',FontSize);
+grid on;
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('Acceleration [m/s^2]','fontsize',FontSize);
+xlim(xlimIndex);
+subplot(4,1,3)
+plot(pltIndxRoad,sn_Ego_Velocity,'color',RP(9,:),'linewidth',2);
+hold on;
+title('Speed','fontsize',FontSize);
+grid on;
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('Speed [km/h]','fontsize',FontSize);
+xlim(xlimIndex);
+subplot(4,1,4)
+plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./Radius,'color',CP(26,:),'linewidth',2);
+% hold on;
+% plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./HC_flt_radius,'g*','linewidth',4);
+% hold off;
+title('Curvature','fontsize',FontSize);
+grid on;
+% ylim([0,200]);
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('1/Radius [1/m]','fontsize',FontSize);
+xlim(xlimIndex);
+
+
+%%
+Radius_revised = [10000, Radius, 10000];
+
+Cal_LateralAcceleration = (sn_Ego_Velocity/3.6).^2 ./ Radius_revised;
+
+
+figure(19)
+set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.8]);
+
+plot(Cal_LateralAcceleration,'color',CP(26,:),'linewidth',2);
+hold on;
+plot(sn_Lat_Accel,'color',CP(6,:),'linewidth',2);
+grid on;
+legend('Calculated Lateral Accel','Measured Lateral Accel');
+title('Comparison calculation with measurement');
