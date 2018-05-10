@@ -25,7 +25,8 @@ def RefCalc(data):
     LocVelRef = LocVel/np.power(tmpAcc,0.25)
     LocVelDiff = LocVel - LocVelRef
     Param_MaxPoint = np.argmax(LocVelDiff)
-    Param_AdjPoint = np.min(np.where(tmpAccDiff<=0))
+#    Param_AdjPoint = np.min(np.where(tmpAccDiff[Param_MaxPoint:]<=0))
+    Param_AdjPoint = np.min(np.where(np.abs(tmpAccDiff[Param_MaxPoint:])<=0.15))+Param_MaxPoint
     return Param_MaxAcc, Param_MaxPoint, Param_AdjPoint
 #%% Calculate corr-coef (vector)
 def CorCalc(vec_1,vec_2):
@@ -34,6 +35,31 @@ def CorCalc(vec_1,vec_2):
     if math.isnan(CorrCoef):
         CorrCoef = 0
     return CorrCoef
+#%% Cluster functions
+def Clu1Pol(x_val,y_val,Cri):
+    y_set = Cri['Y_Set']
+    x_set = Cri['X_Set']
+    CluVal = (y_set[1]-y_set[0])/(x_set[1]-x_set[0])*(x_val-x_set[1])+y_set[1]
+    if y_val <= CluVal:
+        CluIndex = 0
+    else:
+        CluIndex = 1
+    return CluIndex
+
+def CluSqr(x_val,y_val,Cri):
+    x_cri = Cri['MaxPnt']
+    y_cri = Cri['AccDiff']
+    if x_val <= x_cri:
+        if y_val<=y_cri:
+            CluIndex = 0
+        else:
+            CluIndex = 1
+    else:
+        if y_val<=y_cri:
+            CluIndex = 2
+        else:
+            CluIndex = 3
+    return  CluIndex
 #%% Load prediction result
 with open('PredictResult.pickle','rb') as myloaddata:
     PredictData = pickle.load(myloaddata)
@@ -74,6 +100,7 @@ Param_StResult_AdjPoint = []
 Param_SeqResult_MaxPoint = []
 Param_SeqDiff_MaxPoint = []
 
+
 # Prediction data
 # [Predict_Acc,Predict_Vel,Predict_Dis,Predict_AccRef,Predict_Time]
 # Parameter 
@@ -84,20 +111,20 @@ for i in range(len(PredictData['Predict_Int'])):
     PredictState = tmpData[1]
     PredictSequence = tmpData[2]
     ValidDataSet = tmpData[3]
-    [tmpMaxAcc, tmpMaxPoint, tmpAdjPoint] = RefCalc(PredictResult)
+    [tmpMaxAcc, tmpMaxPoint, tmpAdjPoint] = RefCalc(ValidDataSet)
     Param_AdjPoint.append(tmpAdjPoint)
     Param_MaxAcc.append(tmpMaxAcc)
     Param_MaxPoint.append(tmpMaxPoint)
-    Param_MaxPointAccDiff.append(PredictResult[tmpMaxPoint,0] - PredictResult[tmpMaxPoint,3])
+    Param_MaxPointAccDiff.append(ValidDataSet[tmpMaxPoint,0] - ValidDataSet[tmpMaxPoint,3])
     Param_Driver.append(Driver)
-    Param_StResult_MaxPoint.append(PredictState[tmpMaxPoint,:])
-    Param_StResult_AdjPoint.append(PredictState[tmpAdjPoint,:])
-    Param_SeqResult_MaxPoint.append(PredictSequence[tmpMaxPoint,:])
-    tmpPredicData = PredictSequence[tmpMaxPoint,:]
-    tmpPredicDiff = np.zeros(NumSeq)
-    for j in range(NumSeq):
-        tmpPredicDiff[j] = tmpPredicData[-1] - tmpPredicData[j]
-    Param_SeqDiff_MaxPoint.append(tmpPredicDiff)
+    Param_StResult_MaxPoint.append(PredictState[tmpMaxPoint-NumSeq,:])
+    Param_StResult_AdjPoint.append(PredictState[tmpAdjPoint-NumSeq,:])
+    Param_SeqResult_MaxPoint.append(PredictSequence[tmpMaxPoint-NumSeq,:])
+#    tmpPredicData = PredictSequence[tmpMaxPoint,:]
+#    tmpPredicDiff = np.zeros(NumSeq)
+#    for j in range(NumSeq):
+#        tmpPredicDiff[j] = tmpPredicData[-1] - tmpPredicData[j]
+#    Param_SeqDiff_MaxPoint.append(tmpPredicDiff)
         
         
     
@@ -108,7 +135,6 @@ Param_Driver = np.array(Param_Driver)
 Param_StResult_MaxPoint = np.array(Param_StResult_MaxPoint)
 Param_StResult_AdjPoint = np.array(Param_StResult_AdjPoint)
 Param_SeqResult_MaxPoint = np.array(Param_SeqResult_MaxPoint)
-Param_SeqDiff_MaxPoint = np.array(Param_SeqDiff_MaxPoint)
 Param_MaxPointAccDiff = np.array(Param_MaxPointAccDiff)
 #%% Clustering depending on drivers
 DriverSet = [1,2,3]
@@ -120,7 +146,6 @@ Param_MaxAccLst = []
 Param_StResultLst_MaxPoint = []
 Param_StResultLst_AdjPoint = []
 Param_SeqResultLst_MaxPoint = []
-Param_SeqDiffLst_MaxPoint = []
 
 for Driver in DriverSet:
     Param_DriverIndexLst.append(np.array([index for index,value in enumerate(Param_Driver) if value == DriverSet[np.int(Driver)-1]]))
@@ -134,8 +159,6 @@ for Driver in DriverSet:
     Param_StResultLst_MaxPoint.append(Param_StResult_MaxPoint[np.array(Param_DriverIndexLst[Driver-1])])
     
     Param_SeqResultLst_MaxPoint.append(Param_SeqResult_MaxPoint[np.array(Param_DriverIndexLst[Driver-1])])
-    
-    Param_SeqDiffLst_MaxPoint.append(Param_SeqDiff_MaxPoint[np.array(Param_DriverIndexLst[Driver-1])])
     
     Param_StResultLst_AdjPoint.append(Param_StResult_AdjPoint[np.array(Param_DriverIndexLst[Driver-1])])
     
@@ -161,8 +184,6 @@ for Driver in DriverSet:
         tmpDataX2 = Param_AdjPointLst[Driver-1]
         tmpDataY1 = Param_StResultLst_MaxPoint[Driver-1][:,node_index]    
         tmpDataY2 = Param_StResultLst_AdjPoint[Driver-1][:,node_index]    
-#        tmpDataY2 = Param_SeqResultLst_MaxPoint[Driver-1][:,node_index]    
-#        tmpDataY3 = Param_SeqDiffLst_MaxPoint[Driver-1][:,node_index]
         tmpCorrMtrx[0,0,node_index] = CorCalc(tmpDataX1,tmpDataY1)
         tmpCorrMtrx[0,1,node_index] = CorCalc(tmpDataX2,tmpDataY2)        
     CorrCoefLst.append(tmpCorrMtrx)
@@ -173,15 +194,39 @@ for Driver in DriverSet:
     tmpCorrMtrx = CorrCoefLst[Driver-1]
     MaxIndexPoint.append(np.argmax(np.abs(tmpCorrMtrx[0,:,:]),1))        
 #%% Plot max point correlation between AccDiff and State values
-fig, axes = plt.subplots(1, 3,figsize=(9,3))
-node_index = MaxIndexPoint[0][0]
+CluCri = {'X_Set':[0.6,-0.4],'Y_Set':[40,0]}
+CluRan = {'AccDiff':0.4,'MaxPnt':18}
+
+fig, axes = plt.subplots(2, 2,figsize=(9,6))
+#node_index = MaxIndexPoint[0][0]
+node_index = 10
 for Driver in DriverSet:
+    CluIndex = []
+    tmpDataX1 = Param_MaxAccLst[Driver-1]
     tmpDataX = Param_MaxPointLst[Driver-1]
-    tmpDataY = Param_StResultLst_MaxPoint[Driver-1][:,node_index]
+    tmpDataY = Param_MaxPointAccDiffLst[Driver-1]
+    tmpDataY2 = Param_StResultLst_MaxPoint[Driver-1][:,node_index]
     tmpDataZ = Param_AdjPointLst[Driver-1] - Param_MaxPointLst[Driver-1]
-    axes[0].plot(tmpDataX,tmpDataY,'o',ms = 3)
-    axes[1].plot(tmpDataX,tmpDataZ,'o',ms = 3)
-    axes[2].plot(tmpDataY,tmpDataZ,'o',ms = 3)
+    for i in range(len(tmpDataX)):
+        CluIndex.append(Clu1Pol(tmpDataY[i],tmpDataZ[i],CluCri))
+    tmpIndexCl1 = np.array(CluIndex) == 1
+    tmpIndexCl0 = np.array(CluIndex) == 0
+
+ 
+#    axes[0,0].plot(tmpDataX,tmpDataY,'o',ms = 3)
+#    axes[0,1].plot(tmpDataX,tmpDataX1,'o',ms = 3)
+#    axes[1,1].plot(tmpDataY,tmpDataX1,'o',ms = 3)
+#    axes[1,0].plot(tmpDataZ,tmpDataY,'o',ms = 3)
+#    
+    axes[0,0].plot(tmpDataX[tmpIndexCl1],tmpDataY[tmpIndexCl1],'o',ms = 3)
+    axes[0,1].plot(tmpDataX[tmpIndexCl1],tmpDataX1[tmpIndexCl1],'o',ms = 3)
+    axes[1,0].plot(tmpDataX[tmpIndexCl1],tmpDataZ[tmpIndexCl1],'o',ms = 3)
+    axes[1,1].plot(tmpDataZ[tmpIndexCl1],tmpDataY[tmpIndexCl1],'o',ms = 3)
+    
+    axes[0,0].plot(tmpDataX[tmpIndexCl0],tmpDataY[tmpIndexCl0],'^',ms = 3)
+    axes[0,1].plot(tmpDataX[tmpIndexCl0],tmpDataX1[tmpIndexCl0],'^',ms = 3)
+    axes[1,0].plot(tmpDataX[tmpIndexCl0],tmpDataZ[tmpIndexCl0],'^',ms = 3)
+    axes[1,1].plot(tmpDataZ[tmpIndexCl0],tmpDataY[tmpIndexCl0],'o',ms = 3)
 #%% Plot max acc correlation
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
@@ -192,24 +237,57 @@ for Driver in DriverSet:
     tmpDataY = Param_StResultLst_MaxPoint[Driver-1][:,node_index]
     tmpDataZ = Param_AdjPointLst[Driver-1] - Param_MaxPointLst[Driver-1]
     ax.scatter(tmpDataX,tmpDataY,tmpDataZ)
-#%% Plot correlation and data clustering for Maxpoint
-fig, axes = plt.subplots(2, 5, figsize = (15,5))
+#%% Clustering
+node_index = 10
+CluCri = {'X_Set':[0.6,-0.4],'Y_Set':[40,0]}
+CluRan = {'AccDiff':0.4,'MaxPnt':20}
 for Driver in DriverSet:
-    tmpDataX1 = Param_MaxPointLst[Driver-1]
-    for node_index in range(NumSt):
-        tmpDataY = Param_StResultLst_MaxPoint[Driver-1][:,node_index]
-        axes[node_index//5,node_index%5-1].plot(tmpDataX1,tmpDataY,'o',ms = 3)
-
-fig, axes = plt.subplots(2, 5, figsize = (15,5))
-for Driver in DriverSet:
-    tmpDataX1 = Param_MaxPointLst[Driver-1]
-    for node_index in range(NumSt):
-        tmpDataY = Param_SeqResultLst_MaxPoint[Driver-1][:,node_index]
-        axes[node_index//5,node_index%5-1].plot(tmpDataX1,tmpDataY,'o',ms = 3)
+    tmpDataSet = {}
+    CluIndex = []
+    Data = []    
+    tmpDataX = Param_MaxPointLst[Driver-1]
+    tmpDataY = Param_MaxPointAccDiffLst[Driver-1]
+#    tmpDataY = Param_StResultLst_MaxPoint[Driver-1][:,node_index]
+    tmpDataZ = Param_AdjPointLst[Driver-1] - Param_MaxPointLst[Driver-1]
+    tmpDataSet['Par_MaxPnt'] = tmpDataX
+    tmpDataSet['Par_AccDif'] = tmpDataY
+    tmpDataSet['Par_PntDif'] = tmpDataZ
+    
+    tmpDataIndex = np.array(Param_DriverIndexLst[Driver-1])
+    
+    for i in range(len(tmpDataX)):
+        tmpCluIndex = Clu1Pol(tmpDataY[i],tmpDataZ[i],CluCri)
+        if tmpCluIndex == 1:
+            tmpCluIndex2 = CluSqr(tmpDataX[i],tmpDataY[i],CluRan)
+            if ((tmpCluIndex2 == 2) or (tmpCluIndex2 == 0)):
+                CluIndexVal = 3
+            elif tmpCluIndex2 == 3:
+                CluIndexVal = 2
+            else:
+                CluIndexVal = 1
+        else:
+            tmpCluIndex2 = CluSqr(tmpDataX[i],tmpDataY[i],CluRan)
+            if tmpCluIndex2 >= 2:
+                CluIndexVal = 2
+            else:
+                CluIndexVal = tmpCluIndex2
+                
+        CluIndex.append(CluIndexVal)
         
-fig, axes = plt.subplots(2, 5, figsize = (15,5))
-for Driver in DriverSet:
-    tmpDataX1 = Param_MaxPointLst[Driver-1]
-    for node_index in range(NumSt):
-        tmpDataY = Param_SeqDiffLst_MaxPoint[Driver-1][:,node_index]
-        axes[node_index//5,node_index%5-1].plot(tmpDataX1,tmpDataY,'o',ms = 3)        
+        tmpPredictData = np.append(np.zeros([NumSeq,5]), PredictData['Predict_Int'][tmpDataIndex[i]][0], axis = 0)
+        tmpMeasureData = PredictData['Predict_Int'][tmpDataIndex[i]][3][:,0:-1]
+        tmpData = np.append(tmpPredictData, tmpMeasureData, axis = 1)
+        Data.append(tmpData)    
+    tmpDataSet['CluIndex'] = np.array(CluIndex)    
+    tmpDataSet['DataIndex'] = np.array(Param_DriverIndexLst[Driver-1])
+    tmpDataSet['Data'] = np.array(Data)
+    tmpDataName = 'Driver_%d' % Driver
+    globals()[tmpDataName] = tmpDataSet    
+#%% Import data and normalization
+cdir = os.getcwd()
+data_dir = os.chdir('../data')
+DriverDic = {'Driver_1':Driver_1,'Driver_2':Driver_2,'Driver_3':Driver_3}
+io.savemat('PreResult.mat',DriverDic)
+
+
+    
