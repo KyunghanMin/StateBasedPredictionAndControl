@@ -13,6 +13,7 @@ import math
 import pickle
 import random
 from mpl_toolkits.mplot3d import Axes3D
+from sklearn.cluster import KMeans
 #%% Braking data analyze
 def RefCalc(data):
     LocVel = data[:,1]
@@ -99,7 +100,7 @@ Param_StResult_MaxPoint = []
 Param_StResult_AdjPoint = []
 Param_SeqResult_MaxPoint = []
 Param_SeqDiff_MaxPoint = []
-
+Param_CoastSpeed = []
 
 # Prediction data
 # [Predict_Acc,Predict_Vel,Predict_Dis,Predict_AccRef,Predict_Time]
@@ -120,6 +121,7 @@ for i in range(len(PredictData['Predict_Int'])):
     Param_StResult_MaxPoint.append(PredictState[tmpMaxPoint-NumSeq,:])
     Param_StResult_AdjPoint.append(PredictState[tmpAdjPoint-NumSeq,:])
     Param_SeqResult_MaxPoint.append(PredictSequence[tmpMaxPoint-NumSeq,:])
+    Param_CoastSpeed.append(ValidDataSet[0,1])
 #    tmpPredicData = PredictSequence[tmpMaxPoint,:]
 #    tmpPredicDiff = np.zeros(NumSeq)
 #    for j in range(NumSeq):
@@ -127,7 +129,7 @@ for i in range(len(PredictData['Predict_Int'])):
 #    Param_SeqDiff_MaxPoint.append(tmpPredicDiff)
         
         
-    
+Param_CoastSpeed = np.array(Param_CoastSpeed)   
 Param_MaxAcc = np.array(Param_MaxAcc)
 Param_MaxPoint = np.array(Param_MaxPoint)
 Param_AdjPoint = np.array(Param_AdjPoint)
@@ -146,6 +148,7 @@ Param_MaxAccLst = []
 Param_StResultLst_MaxPoint = []
 Param_StResultLst_AdjPoint = []
 Param_SeqResultLst_MaxPoint = []
+Param_CoastSpeedLst = []
 
 for Driver in DriverSet:
     Param_DriverIndexLst.append(np.array([index for index,value in enumerate(Param_Driver) if value == DriverSet[np.int(Driver)-1]]))
@@ -163,6 +166,8 @@ for Driver in DriverSet:
     Param_StResultLst_AdjPoint.append(Param_StResult_AdjPoint[np.array(Param_DriverIndexLst[Driver-1])])
     
     Param_MaxPointAccDiffLst.append(Param_MaxPointAccDiff[np.array(Param_DriverIndexLst[Driver-1])])    
+    
+    Param_CoastSpeedLst.append(Param_CoastSpeed[np.array(Param_DriverIndexLst[Driver-1])])    
     
 #%% Calculate correleation
 SeqNum = np.shape(Param_SeqResult_MaxPoint)[1];
@@ -228,19 +233,43 @@ for Driver in DriverSet:
     axes[1,0].plot(tmpDataX[tmpIndexCl0],tmpDataZ[tmpIndexCl0],'^',ms = 3)
     axes[1,1].plot(tmpDataZ[tmpIndexCl0],tmpDataY[tmpIndexCl0],'o',ms = 3)
 #%% Plot max acc correlation
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
+fig,axes = plt.subplots(1,2)
 
 node_index = MaxIndexPoint[0][0]
 for Driver in DriverSet:
     tmpDataX = Param_MaxPointLst[Driver-1]
-    tmpDataY = Param_StResultLst_MaxPoint[Driver-1][:,node_index]
-    tmpDataZ = Param_AdjPointLst[Driver-1] - Param_MaxPointLst[Driver-1]
-    ax.scatter(tmpDataX,tmpDataY,tmpDataZ)
+    tmpDataY = Param_MaxPointAccDiffLst[Driver-1]
+    tmpDataZ = Param_MaxAccLst[Driver-1]/Param_CoastSpeedLst[Driver-1]
+    axes[0].scatter(tmpDataX,tmpDataZ)
+    axes[1].scatter(tmpDataX,tmpDataY)
+#%% Kmeans clustering
+KmeanX = Param_MaxPoint    
+KmeanY = Param_MaxPointAccDiff
+KmeanZ = Param_MaxAcc/Param_CoastSpeed
+
+KmeanData = np.transpose(np.concatenate([[KmeanX,KmeanY,KmeanZ]]))
+#KmeanDataNorm = NormColArry(KmeanData)[0]
+
+tmpMin = np.min(KmeanData,0)
+tmpMax = np.max(KmeanData,0)
+KmeanDataNorm = (KmeanData - tmpMin)/(tmpMax-tmpMin)
+
+#KmeanDataNorm[:,1] = KmeanDataNorm[:,1]*1.3
+kmeans = KMeans(n_clusters = 4)
+kmeans.fit(KmeanDataNorm)
+labels = kmeans.predict(KmeanDataNorm)
+C = kmeans.cluster_centers_
+
+fig,axes = plt.subplots(1,3)
+for i in range(kmeans.n_clusters):
+    index = labels == i
+    axes[0].scatter(KmeanDataNorm[index,0],KmeanDataNorm[index,1], alpha = 0.5)    
+    axes[1].scatter(KmeanDataNorm[index,0],KmeanDataNorm[index,2], alpha = 0.5)    
+    axes[2].scatter(KmeanDataNorm[index,1],KmeanDataNorm[index,2], alpha = 0.5)    
+    
 #%% Clustering
 node_index = 10
-CluCri = {'X_Set':[0.6,-0.4],'Y_Set':[40,0]}
-CluRan = {'AccDiff':0.4,'MaxPnt':20}
+
 for Driver in DriverSet:
     tmpDataSet = {}
     CluIndex = []
@@ -254,35 +283,19 @@ for Driver in DriverSet:
     tmpDataSet['Par_PntDif'] = tmpDataZ
     
     tmpDataIndex = np.array(Param_DriverIndexLst[Driver-1])
-    
-    for i in range(len(tmpDataX)):
-        tmpCluIndex = Clu1Pol(tmpDataY[i],tmpDataZ[i],CluCri)
-        if tmpCluIndex == 1:
-            tmpCluIndex2 = CluSqr(tmpDataX[i],tmpDataY[i],CluRan)
-            if ((tmpCluIndex2 == 2) or (tmpCluIndex2 == 0)):
-                CluIndexVal = 3
-            elif tmpCluIndex2 == 3:
-                CluIndexVal = 2
-            else:
-                CluIndexVal = 1
-        else:
-            tmpCluIndex2 = CluSqr(tmpDataX[i],tmpDataY[i],CluRan)
-            if tmpCluIndex2 >= 2:
-                CluIndexVal = 2
-            else:
-                CluIndexVal = tmpCluIndex2
-                
-        CluIndex.append(CluIndexVal)
-        
+    CluIndex = labels[tmpDataIndex]
+    for i in range(len(tmpDataIndex)):
         tmpPredictData = np.append(np.zeros([NumSeq,5]), PredictData['Predict_Int'][tmpDataIndex[i]][0], axis = 0)
         tmpMeasureData = PredictData['Predict_Int'][tmpDataIndex[i]][3][:,0:-1]
         tmpData = np.append(tmpPredictData, tmpMeasureData, axis = 1)
-        Data.append(tmpData)    
+        Data.append(tmpData)
+        
     tmpDataSet['CluIndex'] = np.array(CluIndex)    
     tmpDataSet['DataIndex'] = np.array(Param_DriverIndexLst[Driver-1])
     tmpDataSet['Data'] = np.array(Data)
     tmpDataName = 'Driver_%d' % Driver
-    globals()[tmpDataName] = tmpDataSet    
+    globals()[tmpDataName] = tmpDataSet 
+
 #%% Import data and normalization
 cdir = os.getcwd()
 data_dir = os.chdir('../data')
@@ -290,4 +303,3 @@ DriverDic = {'Driver_1':Driver_1,'Driver_2':Driver_2,'Driver_3':Driver_3}
 io.savemat('PreResult.mat',DriverDic)
 
 
-    

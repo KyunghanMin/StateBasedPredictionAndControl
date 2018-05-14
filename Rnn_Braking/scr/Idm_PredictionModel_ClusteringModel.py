@@ -53,6 +53,7 @@ def model_det(model_name):
     globals()[model_name] = model
     print(model.summary())
     return model_name
+
 #%% Import data and normalization
 cdir = os.getcwd()
 data_dir = os.chdir('../data')

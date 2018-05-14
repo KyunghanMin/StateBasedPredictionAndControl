@@ -171,3 +171,22 @@ import pickle
 with open('HyperOpt_History.pickle','wb') as mysavedata:
      pickle.dump([HyperOptHistory,best,OptParam],mysavedata)     
 mysavedata.close()
+#%% Save result to matlab
+with open('HyperOpt_History.pickle','rb') as myloaddata:
+    HyperOptResult = pickle.load(myloaddata)
+
+    
+cdir = os.getcwd()
+data_dir = os.chdir('../data')
+
+ParamOptDic = HyperOptResult[0]
+
+tmpMatDic = {}
+#%%
+for key in ParamOptDic.keys():
+    key_name = 'Iteration_%d' % key
+    tmpDicList = ParamOptDic[key]
+    tmpDic = {'loss':np.array(tmpDicList['loss']),'val_loss':np.array(tmpDicList['val_loss'])}
+    tmpMatDic[key_name] = tmpDic
+    
+io.savemat('ParamOptResult.mat',tmpMatDic)

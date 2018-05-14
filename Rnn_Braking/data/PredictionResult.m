@@ -1,16 +1,22 @@
 KH_ColorCode
 
 load('PreResult')
-
+%%
 fig = figure();
 set(fig,'Color',[1,1,1],'Position',[500 300 700 300]);
 ax1 = subplot(1,3,1);hold on;grid on;
 ax2 = subplot(1,3,2);hold on;grid on;
 ax3 = subplot(1,3,3);hold on;grid on;
 
+fig = figure();
+set(fig,'Color',[1,1,1],'Position',[500 600 700 300]);
+for i = 1:3
+    axes(i) = subplot(1,3,i);hold on;grid on;
+end
+    
 
-fig2 = figure();
-ax4 = axes(fig2);hold on;grid on;
+% fig2 = figure();
+% ax4 = axes(fig2);hold on;grid on;
 for k = 1:3
     eval(['tmpDataStr = Driver_' num2str(k) ''])
     tmpX = tmpDataStr.Par_MaxPnt;
@@ -22,9 +28,9 @@ for k = 1:3
         plot(ax2,tmpX(tmpIndex),tmpZ(tmpIndex),'Marker',Color.MkSet(i),'Color',Color.SP(k*2,:),'linestyle','none','MarkerSize',6);
         plot(ax3,tmpY(tmpIndex),tmpZ(tmpIndex),'Marker',Color.MkSet(i),'Color',Color.SP(k*2,:),'linestyle','none','MarkerSize',6);
         
-        SelectIndex(i,k) = randsample(tmpIndex,1)
-    end
-    h = histogram(ax4,tmpDataStr.CluIndex,'FaceAlpha',0.2,'FaceColor',Color.SP(k*2,:));hold on;
+        SelectIndex(i,k) = randsample(tmpIndex,1);
+    end    
+    h = histogram(axes(k),tmpDataStr.CluIndex,'FaceAlpha',0.2,'FaceColor',Color.SP(k*2,:));hold on;
 end    
 %%
 close all
