@@ -8,9 +8,9 @@ close all;
 %% Load B_spline road model & Vehicle driving data
 % load('../004_Data/CarmakerLogging/0317/RoadMdl/CM_RdlMdl_Ang30.mat') % RoadModel
 % Dataset = load('../004_Data/CarmakerLogging/0317/CM_CANformat_Ang30.mat'); % Vehicle driving data
-
-load('../004_Data/CarmakerLogging/0317/RoadMdl/CM_RdlMdl_Ang30_v120.mat') % RoadModel
-Dataset = load('../004_Data/CarmakerLogging/0317/CM_CANformat_Ang30_v120.mat'); % Vehicle driving data
+ColorCode();
+load('../003_Data/RoadMdl/CM_RdMdl_Ang30_v30.mat') % RoadModel
+Dataset = load('../003_Data/DrivingData/CM_CANformat_Ang30_v100.mat'); % Vehicle driving data
 %% 1. Data Preprocess
 %%    1.1 Vehicle Data
 %%      1.1.1 Filtering Steering angle
@@ -34,9 +34,9 @@ Totallength = (Dataset.RoadLength(end));
 Totallength = round(Totallength/10);
 Totallength = 10*Totallength;
 limit = Totallength; % 5100m (without traffic right), 7300m (Whole Track)
-Sampling = 10; %10m
+Sampling = 5; %10m
 
-ExpandRange = 20000000;
+ExpandRange = 200000;
 ExpolatedRange = linspace(0,1,ExpandRange);
 
 
@@ -46,6 +46,7 @@ Ego_Accel = single(InterPolatedData(Roadway,  Dataset.LONG_ACCEL(:,end)));
 Location = Roadway;
 SteeringAg =  single(InterPolatedData(Roadway, Temp_StrAngFlt(:,end)));
 Lat_Accel =  single(InterPolatedData(Roadway, Dataset.LAT_ACCEL(:,end)));
+Time = single(InterPolatedData(Roadway, Dataset.Time(:,end)));
 % %% Flatten coordinate (Flatten Earth)
 % Lat = Dataset.sig_State_Lat(:,end);
 % Long = Dataset.sig_State_Lon(:,end);
@@ -87,24 +88,27 @@ sn_Location = single(zeros(1,sn_MaxRoadPos));
 sn_Aps = single(zeros(1,sn_MaxRoadPos));
 sn_SteeringAg= single(zeros(1,sn_MaxRoadPos));
 sn_Lat_Accel= single(zeros(1,sn_MaxRoadPos));
-
+sn_Time = single(zeros(1,sn_MaxRoadPos));
 % sn_X = single(zeros(1,sn_MaxRoadPos));
 % sn_Y = single(zeros(1,sn_MaxRoadPos));
 % sn_Z = single(zeros(1,sn_MaxRoadPos));
 
 PrePos = 0;
 count = 0;
+PrePos = Sampling;
 for j = 1 : length(Roadway)
+    
     CurPos  = Roadway(j);
     if CurPos<limit
-        if CurPos - PrePos >=Sampling-0.00001
+        if (CurPos - PrePos) >0
             count = count +1;
-            PrePos = CurPos;
+            PrePos = PrePos+Sampling;
             sn_Ego_Velocity(count) =Ego_Velocity(j);
             sn_Ego_Accel(count) = Ego_Accel(j);
             sn_Location(count) = Location(j);
             sn_SteeringAg(count) =SteeringAg(j);
             sn_Lat_Accel(count) = Lat_Accel(j);
+            sn_Time(count) = Time(j);
         end
     end
 end
@@ -170,8 +174,8 @@ HC_sn_Ego_Velocity(flt_curvature<CurveStandard)=NaN;
 HC_sn_SteeringAngle = sn_SteeringAg;
 HC_sn_SteeringAngle(flt_curvature<CurveStandard)=NaN;
 HC_flt_radius = flt_radius;
-HC_flt_radius(1./flt_radius<CurveStandard)=100000;
-figure(1)
+HC_flt_radius(1./flt_radius<CurveStandard)=NaN;
+figure(99)
 set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.95]);
 plot(sn_X,sn_Y,'black','linewidth',2);
 hold on;
@@ -183,7 +187,7 @@ title('Map','fontsize',20);
 xlabel('[m]');
 ylabel('[m]');
 grid on;
-%%      [Plot 2] Curvature VS Speed VS Steering angle
+%%      [Plot 2] Curvature VS Speed VS 1/Radius
 pltIndxRoad = 1 : length(flt_curvature);
 pltIndxRoad = Sampling*pltIndxRoad;
 figure(2)
@@ -191,7 +195,7 @@ set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.95]);
 subplot(3,1,1)
 plot(pltIndxRoad,flt_curvature,'black','linewidth',2);
 hold on;
-plot(pltIndxRoad,HC_Curvature,'g*','linewidth',4);
+plot(pltIndxRoad,HC_Curvature,'g*','linewidth',0.5);
 hold off;
 title('Curvature');
 grid on;
@@ -201,7 +205,7 @@ ylabel('Curvature [1/m]');
 subplot(3,1,2)
 plot(pltIndxRoad,sn_Ego_Velocity,'black','linewidth',2);
 hold on;
-plot(pltIndxRoad,HC_sn_Ego_Velocity,'g*','linewidth',4);
+plot(pltIndxRoad,HC_sn_Ego_Velocity,'g*','linewidth',0.5);
 hold off;
 title('Speed');
 grid on;
@@ -211,13 +215,13 @@ ylabel('Speed [km/h]');
 subplot(3,1,3)
 plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./flt_radius,'black','linewidth',2);
 hold on;
-plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./HC_flt_radius,'g*','linewidth',4);
+plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./HC_flt_radius,'g*','linewidth',0.5);
 hold off;
-title('Steering Angle');
+title('1/Radius');
 grid on;
 % ylim([0,200]);
 xlabel('Roadway position [m]');
-ylabel('Steering Angle [degree]');
+ylabel('1/Radius [1/m]');
 %%      [Plot 3] Curvature VS 1/Radius
 figure(3)
 set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.95]);
@@ -395,217 +399,495 @@ title('Curvature based Speed Model');
 legend('true','Curvature Model');
 grid on;
 hold off;
-%% 3. Design Curvature based Speed Model (Composed with 2 sections) (Modelling)
-%%      [Process 1] Set range of sections
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-[FC_Curve_max,FC_Curve_maxIdx] = max(FC_Tot_Curvature);
-Section_range = FC_Curve_maxIdx;
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-FirstCurve_Entry = CurveInit:CurveInit+Section_range-1;
-FC_Ent_Curvature = double(flt_curvature(FirstCurve_Entry));
-FC_Ent_Speed =double(sn_Ego_Velocity(FirstCurve_Entry));
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-FirstCurve_Exit = CurveInit+Section_range:CurveEnd;
-FC_Exit_Curvature = double(flt_curvature(FirstCurve_Exit));
-FC_Exit_Speed =double(sn_Ego_Velocity(FirstCurve_Exit));
-%%      [Process 2] Design Curv based Speed Mdl
-FC_Ent_V0 = FC_Ent_Speed(1);
-fun1 = @(k,FC_Curvature)FC_Ent_V0-k(1)*exp(k(2)*FC_Ent_V0*FC_Curvature);
-k0 = [0,0];
-k_ent = lsqcurvefit(fun1,k0,FC_Ent_Curvature,FC_Ent_Speed);
-CurMdlSpd_Ent = fun1(k_ent,FC_Ent_Curvature);
+% %% 3. Design Curvature based Speed Model (Composed with 2 sections) (Modelling)
+% %%      [Process 1] Set range of sections
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% [FC_Curve_max,FC_Curve_maxIdx] = max(FC_Tot_Curvature);
+% Section_range = FC_Curve_maxIdx;
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FirstCurve_Entry = CurveInit:CurveInit+Section_range-1;
+% FC_Ent_Curvature = double(flt_curvature(FirstCurve_Entry));
+% FC_Ent_Speed =double(sn_Ego_Velocity(FirstCurve_Entry));
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FirstCurve_Exit = CurveInit+Section_range:CurveEnd;
+% FC_Exit_Curvature = double(flt_curvature(FirstCurve_Exit));
+% FC_Exit_Speed =double(sn_Ego_Velocity(FirstCurve_Exit));
+% %%      [Process 2] Design Curv based Speed Mdl
+% FC_Ent_V0 = FC_Ent_Speed(1);
+% fun1 = @(k,FC_Curvature)FC_Ent_V0-k(1)*exp(k(2)*FC_Ent_V0*FC_Curvature);
+% k0 = [0,0];
+% k_ent = lsqcurvefit(fun1,k0,FC_Ent_Curvature,FC_Ent_Speed);
+% CurMdlSpd_Ent = fun1(k_ent,FC_Ent_Curvature);
+% 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FC_Exit_V0 = CurMdlSpd_Ent(end);
+% fun3 = @(k,FC_Curvature)FC_Exit_V0-k(1)*exp(k(2)*FC_Exit_V0*FC_Curvature);
+% k_exit = lsqcurvefit(fun3,k0,FC_Exit_Curvature,FC_Exit_Speed);
+% CurMdlSpd_Exit = fun3(k_exit,FC_Exit_Curvature);
+% %%      [Process 3] Result Plot
+% figure(7)
+% % set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.95]);
+% set(gcf, 'color','w','pos',[10 10 1300 700]);
+% subplot(2,2,1)
+% pltIndxRoad = Sampling*FirstCurve_Entry;
+% plot(pltIndxRoad,FC_Ent_Speed,'black','linewidth',3);
+% hold on;
+% plot(pltIndxRoad,fun1(k_ent,FC_Ent_Curvature),'magenta','linewidth',3);
+% hold off;
+% ylabel('Vehicle Speed [km/h]');
+% legend('true','Curvature Model');
+% xlabel('Roadway position [m]');
+% title('Curve Speed model (Enter section)');
+% grid on;
+% subplot(2,2,2)
+% pltIndxRoad = Sampling*FirstCurve_Exit;
+% plot(pltIndxRoad,FC_Exit_Speed,'black','linewidth',3);
+% hold on;
+% plot(pltIndxRoad,fun3(k_exit,FC_Exit_Curvature),'magenta','linewidth',3);
+% hold off;
+% ylabel('Vehicle Speed [km/h]');
+% legend('true','Curvature Model');
+% xlabel('Roadway position [m]');
+% title('Curve Speed model (Exit section)');
+% grid on;
+% 
+% CurvMdlSpd_2parts = [CurMdlSpd_Ent CurMdlSpd_Exit];
+% subplot(2,2,3:4)
+% pltIndxRoad = Sampling*FirstCurve_Total;
+% plot(pltIndxRoad,FC_Tot_Speed,'black','linewidth',3);
+% hold on;
+% plot(pltIndxRoad,CurvMdlSpd_2parts,'magenta','linewidth',3);
+% hold off;
+% xlabel('Roadway Position [m]');
+% ylabel('Vehicle Speed [km/h]');
+% title('Curvature based Speed Model');
+% legend('true','Curvature Model');
+% grid on;
+% % Calculation R2 RMSE
+% [R2_Mdl_2sect_mdl, RMSE_Mdl_2sect_mdl] = Cal_RMSE_RSQUARE(FC_Tot_Speed,CurvMdlSpd_2parts);
+% %% 4. Design Curvature based Speed Model (Composed with 2 sections) (Validation)
+% %%      [Process 1] Set range of sections
+% CurveInit = round(3680/Sampling);
+% CurveEnd = round(3780/Sampling);
+% % RangeEye2Road = 24;
+% SecondCurve_Total = CurveInit:CurveEnd;
+% SC_Tot_Curvature = double(flt_curvature(SecondCurve_Total));
+% SC_Tot_Speed =double(sn_Ego_Velocity(SecondCurve_Total));
+% SC_Tot_V0 = SC_Tot_Speed(1);
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% [SC_Curve_max,SC_Curve_maxIdx] = max(SC_Tot_Curvature);
+% Section_range = SC_Curve_maxIdx;
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% SecondCurve_Entry = CurveInit:CurveInit+Section_range-1;
+% SC_Ent_Curvature = double(flt_curvature(SecondCurve_Entry));
+% SC_Ent_Speed =double(sn_Ego_Velocity(SecondCurve_Entry));
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% SecondCurve_Exit = CurveInit+Section_range:CurveEnd;
+% SC_Exit_Curvature = double(flt_curvature(SecondCurve_Exit));
+% SC_Exit_Speed =double(sn_Ego_Velocity(SecondCurve_Exit));
+% %%      [Process 2] Design Curv based Speed Mdl
+% SC_Ent_V0 = SC_Ent_Speed(1);
+% fun1 = @(k,SC_Curvature)SC_Ent_V0-k(1)*exp(k(2)*SC_Ent_V0*SC_Curvature);
+% k0 = [0,0];
+% 
+% CurMdlSpd_Ent = fun1(k_ent,SC_Ent_Curvature);
+% 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% SC_Exit_V0 = CurMdlSpd_Ent(end);
+% fun3 = @(k,SC_Curvature)SC_Exit_V0-k(1)*exp(k(2)*SC_Exit_V0*SC_Curvature);
+% CurMdlSpd_Exit = fun3(k_exit,SC_Exit_Curvature);
+% %%      [Process 3] Result Plot
+% figure(900)
+% % set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.95]);
+% set(gcf, 'color','w','pos',[10 10 1300 700]);
+% subplot(2,2,1)
+% pltIndxRoad = Sampling*SecondCurve_Entry;
+% plot(pltIndxRoad,SC_Ent_Speed,'black','linewidth',3);
+% hold on;
+% plot(pltIndxRoad,fun1(k_ent,SC_Ent_Curvature),'magenta','linewidth',3);
+% hold off;
+% ylabel('Vehicle Speed [km/h]');
+% legend('true','Curvature Model');
+% xlabel('Roadway position [m]');
+% title('Curve Speed model (Enter section)');
+% grid on;
+% subplot(2,2,2)
+% pltIndxRoad = Sampling*SecondCurve_Exit;
+% plot(pltIndxRoad,SC_Exit_Speed,'black','linewidth',3);
+% hold on;
+% plot(pltIndxRoad,fun3(k_exit,SC_Exit_Curvature),'magenta','linewidth',3);
+% hold off;
+% ylabel('Vehicle Speed [km/h]');
+% legend('true','Curvature Model');
+% xlabel('Roadway position [m]');
+% title('Curve Speed model (Exit section)');
+% grid on;
+% 
+% CurvMdlSpd_2parts = [CurMdlSpd_Ent CurMdlSpd_Exit];
+% subplot(2,2,3:4)
+% pltIndxRoad = Sampling*SecondCurve_Total;
+% plot(pltIndxRoad,SC_Tot_Speed,'black','linewidth',3);
+% hold on;
+% plot(pltIndxRoad,CurvMdlSpd_2parts,'magenta','linewidth',3);
+% hold off;
+% xlabel('Roadway Position [m]');
+% ylabel('Vehicle Speed [km/h]');
+% title('Curvature based Speed Model');
+% legend('true','Curvature Model');
+% grid on;
+% % Calculation R2 RMSE
+% [R2_Mdl_2sect_val, RMSE_Mdl_2sect_val] = Cal_RMSE_RSQUARE(SC_Tot_Speed,CurvMdlSpd_2parts);
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-FC_Exit_V0 = CurMdlSpd_Ent(end);
-fun3 = @(k,FC_Curvature)FC_Exit_V0-k(1)*exp(k(2)*FC_Exit_V0*FC_Curvature);
-k_exit = lsqcurvefit(fun3,k0,FC_Exit_Curvature,FC_Exit_Speed);
-CurMdlSpd_Exit = fun3(k_exit,FC_Exit_Curvature);
-%%      [Process 3] Result Plot
-figure(7)
+% %% 5. Design Lateral Acceleration based Speed Model
+% %%      [Process 1] Set range of sections
+% FC_Radius = flt_radius(FirstCurve_Total+1);
+% figure(8)
 % set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.95]);
-set(gcf, 'color','w','pos',[10 10 1300 700]);
-subplot(2,2,1)
-pltIndxRoad = Sampling*FirstCurve_Entry;
-plot(pltIndxRoad,FC_Ent_Speed,'black','linewidth',3);
-hold on;
-plot(pltIndxRoad,fun1(k_ent,FC_Ent_Curvature),'magenta','linewidth',3);
-hold off;
-ylabel('Vehicle Speed [km/h]');
-legend('true','Curvature Model');
-xlabel('Roadway position [m]');
-title('Curve Speed model (Enter section)');
-grid on;
-subplot(2,2,2)
-pltIndxRoad = Sampling*FirstCurve_Exit;
-plot(pltIndxRoad,FC_Exit_Speed,'black','linewidth',3);
-hold on;
-plot(pltIndxRoad,fun3(k_exit,FC_Exit_Curvature),'magenta','linewidth',3);
-hold off;
-ylabel('Vehicle Speed [km/h]');
-legend('true','Curvature Model');
-xlabel('Roadway position [m]');
-title('Curve Speed model (Exit section)');
-grid on;
-
-CurvMdlSpd_2parts = [CurMdlSpd_Ent CurMdlSpd_Exit];
-subplot(2,2,3:4)
-pltIndxRoad = Sampling*FirstCurve_Total;
-plot(pltIndxRoad,FC_Tot_Speed,'black','linewidth',3);
-hold on;
-plot(pltIndxRoad,CurvMdlSpd_2parts,'magenta','linewidth',3);
-hold off;
-xlabel('Roadway Position [m]');
-ylabel('Vehicle Speed [km/h]');
-title('Curvature based Speed Model');
-legend('true','Curvature Model');
-grid on;
-% Calculation R2 RMSE
-[R2_Mdl_2sect_mdl, RMSE_Mdl_2sect_mdl] = Cal_RMSE_RSQUARE(FC_Tot_Speed,CurvMdlSpd_2parts);
-%% 4. Design Curvature based Speed Model (Composed with 2 sections) (Validation)
-%%      [Process 1] Set range of sections
-CurveInit = round(3680/Sampling);
-CurveEnd = round(3780/Sampling);
-% RangeEye2Road = 24;
-SecondCurve_Total = CurveInit:CurveEnd;
-SC_Tot_Curvature = double(flt_curvature(SecondCurve_Total));
-SC_Tot_Speed =double(sn_Ego_Velocity(SecondCurve_Total));
-SC_Tot_V0 = SC_Tot_Speed(1);
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-[SC_Curve_max,SC_Curve_maxIdx] = max(SC_Tot_Curvature);
-Section_range = SC_Curve_maxIdx;
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-SecondCurve_Entry = CurveInit:CurveInit+Section_range-1;
-SC_Ent_Curvature = double(flt_curvature(SecondCurve_Entry));
-SC_Ent_Speed =double(sn_Ego_Velocity(SecondCurve_Entry));
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-SecondCurve_Exit = CurveInit+Section_range:CurveEnd;
-SC_Exit_Curvature = double(flt_curvature(SecondCurve_Exit));
-SC_Exit_Speed =double(sn_Ego_Velocity(SecondCurve_Exit));
-%%      [Process 2] Design Curv based Speed Mdl
-SC_Ent_V0 = SC_Ent_Speed(1);
-fun1 = @(k,SC_Curvature)SC_Ent_V0-k(1)*exp(k(2)*SC_Ent_V0*SC_Curvature);
-k0 = [0,0];
-
-CurMdlSpd_Ent = fun1(k_ent,SC_Ent_Curvature);
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-SC_Exit_V0 = CurMdlSpd_Ent(end);
-fun3 = @(k,SC_Curvature)SC_Exit_V0-k(1)*exp(k(2)*SC_Exit_V0*SC_Curvature);
-CurMdlSpd_Exit = fun3(k_exit,SC_Exit_Curvature);
-%%      [Process 3] Result Plot
-figure(900)
-% set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.95]);
-set(gcf, 'color','w','pos',[10 10 1300 700]);
-subplot(2,2,1)
-pltIndxRoad = Sampling*SecondCurve_Entry;
-plot(pltIndxRoad,SC_Ent_Speed,'black','linewidth',3);
-hold on;
-plot(pltIndxRoad,fun1(k_ent,SC_Ent_Curvature),'magenta','linewidth',3);
-hold off;
-ylabel('Vehicle Speed [km/h]');
-legend('true','Curvature Model');
-xlabel('Roadway position [m]');
-title('Curve Speed model (Enter section)');
-grid on;
-subplot(2,2,2)
-pltIndxRoad = Sampling*SecondCurve_Exit;
-plot(pltIndxRoad,SC_Exit_Speed,'black','linewidth',3);
-hold on;
-plot(pltIndxRoad,fun3(k_exit,SC_Exit_Curvature),'magenta','linewidth',3);
-hold off;
-ylabel('Vehicle Speed [km/h]');
-legend('true','Curvature Model');
-xlabel('Roadway position [m]');
-title('Curve Speed model (Exit section)');
-grid on;
-
-CurvMdlSpd_2parts = [CurMdlSpd_Ent CurMdlSpd_Exit];
-subplot(2,2,3:4)
-pltIndxRoad = Sampling*SecondCurve_Total;
-plot(pltIndxRoad,SC_Tot_Speed,'black','linewidth',3);
-hold on;
-plot(pltIndxRoad,CurvMdlSpd_2parts,'magenta','linewidth',3);
-hold off;
-xlabel('Roadway Position [m]');
-ylabel('Vehicle Speed [km/h]');
-title('Curvature based Speed Model');
-legend('true','Curvature Model');
-grid on;
-% Calculation R2 RMSE
-[R2_Mdl_2sect_val, RMSE_Mdl_2sect_val] = Cal_RMSE_RSQUARE(SC_Tot_Speed,CurvMdlSpd_2parts);
-
-%% 5. Design Lateral Acceleration based Speed Model
-%%      [Process 1] Set range of sections
-FC_Radius = flt_radius(FirstCurve_Total+1);
-figure(8)
-set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.95]);
-plot(FC_Radius);
-LatMax = 3.8;
-Spd_Rad = sqrt(LatMax*FC_Radius)*3.6;
-figure(9)
-plot(Spd_Rad);
-%%
-Small_RadIdx = find(FC_Radius<30);
-Spd_SmallRad = sqrt(LatMax*FC_Radius(Small_RadIdx))*3.6;
-figure(10)
-plot(Spd_SmallRad);
-
+% plot(FC_Radius);
+% LatMax = 3.8;
+% Spd_Rad = sqrt(LatMax*FC_Radius)*3.6;
+% figure(9)
+% plot(Spd_Rad);
+% %%
+% Small_RadIdx = find(FC_Radius<30);
+% Spd_SmallRad = sqrt(LatMax*FC_Radius(Small_RadIdx))*3.6;
+% figure(10)
+% plot(Spd_SmallRad);
+% 
+% 
+% % %%
+% % figure(12)
+% % subplot(2,1,1)
+% % plot(Radius);
+% % ylim([0,100]);
+% % subplot(2,1,2)
+% % plot(sn_Curvature);
 
 % %%
+% 
 % figure(12)
-% subplot(2,1,1)
-% plot(Radius);
-% ylim([0,100]);
-% subplot(2,1,2)
-% plot(sn_Curvature);
+% scatter(1./flt_radius(HighCV_Idx), sn_Ego_Velocity(HighCV_Idx));
+% 
+% hold off;
+% %%
+% 
+% Inverse_HC_radius=1./HC_flt_radius;
+% Indx_Curve = find(Inverse_HC_radius>0.002);
+% Indx_Curve_Enter = [];
+% Indx_Curve_Exit = [];
+% Indx_Temp  = 0 ;
+% for i = 1: length(Indx_Curve)
+%     if(Indx_Temp - Indx_Curve(i) <-300/Sampling)
+%         Indx_Temp= Indx_Curve(i);
+%         Indx_Curve_Enter = [Indx_Curve_Enter; Indx_Temp];
+%         
+%     end
+% end
+% Indx_Temp  = 10000000 ;
+% for i = length(Indx_Curve): -1 : 1
+%     if(Indx_Temp - Indx_Curve(i) >300/Sampling)
+%         Indx_Temp= Indx_Curve(i);
+%         Indx_Curve_Exit = [Indx_Temp;Indx_Curve_Exit];
+%     end
+% end
+% Indx_Curve_EnterExit = [Indx_Curve_Enter,Indx_Curve_Exit];
+% 
+% Indx_Curve_EnterSection = zeros(length(Indx_Curve_EnterExit),200/Sampling);
+% 
+% for i = 1: length(Indx_Curve_EnterExit)
+%     for j = 1 : round((Indx_Curve_Exit(i,1)- Indx_Curve_Enter(i,1))/2)
+%         Indx_Curve_EnterSection(i,j) = Indx_Curve_Enter(i,1)+j;
+%     end
+% end
+% 
+% Indx_Temp=0;
+% Indx_Curve_EnterSection_1D = [];
+% for i = 1: length(Indx_Curve_EnterSection(:,1))
+%     for j = 1: length(Indx_Curve_EnterSection(1,:))-1
+%         if(Indx_Temp - Indx_Curve_EnterSection(i,j) <500)            
+%             Indx_Curve_EnterSection_1D = [Indx_Curve_EnterSection_1D; Indx_Curve_EnterSection(i,j)];
+%             Indx_Temp = Indx_Curve_EnterSection(i,j);            
+%         end
+%     end
+%     
+% end
 
+%% Plot Accel VehSpd Curvature
+Radius_revised = [10000, Radius, 10000];
+pltIndxRoad = 1 : length(flt_curvature);
+pltIndxRoad = Sampling*pltIndxRoad;
+% 
+PlotRange = [700/Sampling : 1400/Sampling];
+% 
+% PlotRange = [4700/Sampling : 5500/Sampling];
+
+FontSize = 13;
+figure(15)
+set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.8]);
+subplot(3,2,1)
+plot(pltIndxRoad(PlotRange),sn_Ego_Accel(PlotRange),'color',YP(9,:),'linewidth',2);
+hold on;
+title('Longitudinal Acceleration','fontsize',FontSize);
+grid on;
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('Acceleration [m/s^2]','fontsize',FontSize);
+
+subplot(3,2,3)
+plot(pltIndxRoad(PlotRange),sn_Ego_Velocity(PlotRange),'color',RP(9,:),'linewidth',2);
+hold on;
+title('Speed','fontsize',FontSize);
+grid on;
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('Speed [km/h]','fontsize',FontSize);
+
+subplot(3,2,5)
+plot(pltIndxRoad(PlotRange),1./Radius_revised(PlotRange),'color',CP(26,:),'linewidth',2);
+% hold on;
+% plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./HC_flt_radius,'g*','linewidth',4);
+% hold off;
+title('Curvature','fontsize',FontSize);
+grid on;
+% ylim([0,200]);
+xlabel('Roadway position [m]','fontsize',FontSize);
+
+ylabel('1/Radius [1/m]','fontsize',FontSize);
+
+set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 0.6 0.9]);
+subplot(3,2,2)
+plot(sn_Time(PlotRange),sn_Ego_Accel(PlotRange),'color',YP(9,:),'linewidth',2);
+hold on;
+title('Longitudinal Acceleration Time','fontsize',FontSize);
+grid on;
+xlabel('Time [s]','fontsize',FontSize);
+ylabel('Acceleration [m/s^2]','fontsize',FontSize);
+
+subplot(3,2,4)
+plot(sn_Time(PlotRange),sn_Ego_Velocity(PlotRange),'color',YP(5,:),'linewidth',2);
+hold on;
+title('VehicleSpeed','fontsize',FontSize);
+grid on;
+xlabel('Time [s]','fontsize',FontSize);
+ylabel('Speed [km/h]','fontsize',FontSize);
+
+subplot(3,2,6)
+plot(sn_Time(PlotRange),1./Radius_revised(PlotRange),'color',CP(26,:),'linewidth',2);
+% hold on;
+% plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./HC_flt_radius,'g*','linewidth',4);
+% hold off;
+title('Curvature','fontsize',FontSize);
+grid on;
+% ylim([0,200]);
+xlabel('Time [s]','fontsize',FontSize);
+ylabel('1/Radius [1/m]','fontsize',FontSize);
+
+%% Sample data
+
+SampleTime = sn_Time(PlotRange);
+SampleDistance = pltIndxRoad(PlotRange);
+SampleRadius = Radius_revised(PlotRange);
+SampleSpeed= sn_Ego_Velocity(PlotRange);
+SampleLongAccel = sn_Ego_Accel(PlotRange);
+SampleLatAccel= sn_Lat_Accel(PlotRange);
+
+
+MinimumRadius=min(SampleRadius);
+
+%% Driver Parameter
+LatMax = 3;
+%%
+V0 = SampleSpeed(1);
+IdealV_Final = 3.6*sqrt(LatMax*MinimumRadius);
+%% Section devide (Initial Section)
+IndexBraking = find(SampleLongAccel<-0.01);
+InitIndex_InitialSection = IndexBraking(1);
+InitTime_InitialSection = SampleTime(InitIndex_InitialSection);
+
+%% Section devide (Initial Section2)
+DerivativeAccelArr = [];
+for index  = 1: length(SampleTime)-1
+    dt = SampleTime(index+1) - SampleTime(index);
+    dAccel = SampleLongAccel(index+1)-SampleLongAccel(index);
+    DerivativeAccel = dAccel/dt;
+    DerivativeAccelArr = [DerivativeAccelArr DerivativeAccel];
+end
+flag = 0;
+for index  = 1: length(DerivativeAccelArr)
+    if flag ==0 && index>InitIndex_InitialSection && DerivativeAccelArr(index)>0
+        InitIndex_InitialSection2 = index;
+        flag = 1;
+    end
+end
+InitTime_InitialSection2 = SampleTime(InitIndex_InitialSection2);
+%% Section devide (Adjustment Section)
+IndexLatMax = find(SampleLongAccel<-LatMax+0.01);
+InitIndex_AdjustmentSection = IndexLatMax(1);
+InitTime_AdjustmentSection = SampleTime(InitIndex_AdjustmentSection);
+LengthInitSection1= InitTime_InitialSection2-InitTime_InitialSection;
+LengthInitSection2= InitTime_AdjustmentSection-InitTime_InitialSection2;
+flag = 0;
+DevAccelThreslhold = 0.5;
+for index  = 1: length(DerivativeAccelArr)-3
+    Temp1 = DerivativeAccelArr(index+3);
+    Temp2 =DerivativeAccelArr(index+2);
+    Temp3 = DerivativeAccelArr(index+1);
+    if flag ==0 && Temp1 >DevAccelThreslhold&&  Temp2>DevAccelThreslhold  && Temp3>DevAccelThreslhold
+        InitIndex_TerminationSection=index;
+        flag = 1;
+    end
+end
+InitTime_TerminationSection = SampleTime(InitIndex_TerminationSection);
+LengthAdjustmentSection = InitTime_TerminationSection - InitTime_AdjustmentSection;
+%% Section devide (Termination Section)
+IndexAccel=find(SampleLongAccel>-0.3);
+flag = 0;
+for index = 1: length(IndexAccel)
+    if flag ==0 && IndexAccel(index)>InitIndex_TerminationSection
+        Temp_ExitIndex_TerminationSection = index;
+        flag = 1;
+    end
+end
+ExitIndex_TerminationSection = IndexAccel(Temp_ExitIndex_TerminationSection);
+ExitTime_TerminationSection = SampleTime(ExitIndex_TerminationSection);
+LengthTerminationSection =  ExitTime_TerminationSection-InitTime_TerminationSection;
 %%
 
-figure(12)
-scatter(1./flt_radius(HighCV_Idx), sn_Ego_Velocity(HighCV_Idx));
+fig=figure('name','Timing parameter','numbertitle','off');
+set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 0.5 0.55]);
 
-hold off;
+% Set sub plot 1;
+ax1 = subplot(1,1,1);
+set(ax1,'parent',fig);hold(ax1,'on');box(ax1,'on')
+plot(ax1,SampleTime,SampleLongAccel,'color',WP(8,:),'linewidth',6);grid on;
+scatter(ax1, SampleTime(InitIndex_InitialSection), SampleLongAccel(InitIndex_InitialSection),'*','MarkerEdgeColor',PP(4,:),'LineWidth',9);
+scatter(ax1, SampleTime(InitIndex_InitialSection2), SampleLongAccel(InitIndex_InitialSection2),'*','MarkerEdgeColor',PP(4,:),'LineWidth',9);
+scatter(ax1, SampleTime(InitIndex_AdjustmentSection), SampleLongAccel(InitIndex_AdjustmentSection),'*','MarkerEdgeColor',PP(4,:),'LineWidth',9);
+scatter(ax1, SampleTime(InitIndex_TerminationSection), SampleLongAccel(InitIndex_TerminationSection),'*','MarkerEdgeColor',PP(4,:),'LineWidth',9);
+scatter(ax1, SampleTime(ExitIndex_TerminationSection), SampleLongAccel(ExitIndex_TerminationSection),'*','MarkerEdgeColor',PP(4,:),'LineWidth',9);
+
+title('Longitudinal Acceleration Time','fontsize',FontSize);
+xlabel('Time [s]','fontsize',FontSize);
+ylabel('Acceleration [m/s^2]','fontsize',FontSize);
 %%
+TimingParameters_t = [InitTime_InitialSection, InitTime_InitialSection2,InitTime_AdjustmentSection, InitTime_TerminationSection, ExitTime_TerminationSection];
+Accel_Timing = [SampleLongAccel(InitIndex_InitialSection),SampleLongAccel(InitIndex_InitialSection2),SampleLongAccel(InitIndex_AdjustmentSection),SampleLongAccel(InitIndex_TerminationSection),SampleLongAccel(ExitIndex_TerminationSection)];
+fig=figure('name','Timing parameter','numbertitle','off');
+set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 0.5 0.55]);
+ax1 = subplot(1,1,1);
+set(ax1,'parent',fig);hold(ax1,'on');box(ax1,'on')
+plot(ax1,SampleTime,SampleLongAccel,'color',WP(8,:),'linewidth',6);grid on;
+plot(ax1,TimingParameters_t,Accel_Timing,'color',PP(4,:),'linewidth',2,'linestyle','--');grid on;
+area(ax1,TimingParameters_t,Accel_Timing,'FaceColor',PP(4,:),'EdgeColor',PP(4,:),'linewidth',2,'linestyle',':','FaceAlpha',0.3);
 
-Inverse_HC_radius=1./HC_flt_radius;
-Indx_Curve = find(Inverse_HC_radius>0.002);
-Indx_Curve_Enter = [];
-Indx_Curve_Exit = [];
-Indx_Temp  = 0 ;
-for i = 1: length(Indx_Curve)
-    if(Indx_Temp - Indx_Curve(i) <-300/Sampling)
-        Indx_Temp= Indx_Curve(i);
-        Indx_Curve_Enter = [Indx_Curve_Enter; Indx_Temp];
-        
-    end
-end
-Indx_Temp  = 10000000 ;
-for i = length(Indx_Curve): -1 : 1
-    if(Indx_Temp - Indx_Curve(i) >300/Sampling)
-        Indx_Temp= Indx_Curve(i);
-        Indx_Curve_Exit = [Indx_Temp;Indx_Curve_Exit];
-    end
-end
-Indx_Curve_EnterExit = [Indx_Curve_Enter,Indx_Curve_Exit];
+IntegralAccelMdl = abs(trapz(TimingParameters_t, Accel_Timing));
+%% Model Parameter setting
+Init1_Init2 = LengthInitSection1;
+Init2_Adj = LengthInitSection2;
+AccelInit2 = abs(SampleLongAccel(InitIndex_InitialSection2));
+Adj_Term= LengthAdjustmentSection;
+Term_Exit = LengthTerminationSection;
+% LatMax
+%% Model Validation
+StaticArea = (0.5*(Init1_Init2*AccelInit2)+0.5*(LatMax+AccelInit2)*Init2_Adj+0.5*LatMax*Term_Exit); 
 
-Indx_Curve_EnterSection = zeros(length(Indx_Curve_EnterExit),200/Sampling);
+load('ValidationSet.mat');
 
-for i = 1: length(Indx_Curve_EnterExit)
-    for j = 1 : round((Indx_Curve_Exit(i,1)- Indx_Curve_Enter(i,1))/2)
-        Indx_Curve_EnterSection(i,j) = Indx_Curve_Enter(i,1)+j;
-    end
-end
-
-Indx_Temp=0;
-Indx_Curve_EnterSection_1D = [];
-for i = 1: length(Indx_Curve_EnterSection(:,1))
-    for j = 1: length(Indx_Curve_EnterSection(1,:))-1
-        if(Indx_Temp - Indx_Curve_EnterSection(i,j) <500)            
-            Indx_Curve_EnterSection_1D = [Indx_Curve_EnterSection_1D; Indx_Curve_EnterSection(i,j)];
-            Indx_Temp = Indx_Curve_EnterSection(i,j);            
-        end
-    end
-    
-end
+[V_MinimumRadius,MinRadiusIndx]=min(V_SampleRadius);
+V_V0 = V_SampleSpeed(1);
+V_IdealV_Final = 3.6*sqrt(LatMax*V_MinimumRadius);
+DynamicArea = V_V0/3.6-V_IdealV_Final/3.6 -StaticArea;
+V_Adj_Term =  DynamicArea/LatMax;
+MinimumRadiusTime = V_SampleTime(MinRadiusIndx);
 
 
+
+
+
+
+
+V_ExitTime_TerminationSection = V_SampleTime(MinRadiusIndx)+1;
+V_InitTime_TerminationSection = V_ExitTime_TerminationSection-Term_Exit;
+V_InitTime_AdjustmentSection = V_InitTime_TerminationSection - V_Adj_Term;
+V_InitTime_InitialSection2 = V_InitTime_AdjustmentSection -Init2_Adj;
+V_InitTime_InitialSection = V_InitTime_InitialSection2 - Init1_Init2;
+V_TimingParameters_t = [V_InitTime_InitialSection, V_InitTime_InitialSection2,V_InitTime_AdjustmentSection, V_InitTime_TerminationSection, V_ExitTime_TerminationSection];
+V_Accel_Timing = [0,-AccelInit2,-LatMax,-LatMax,0];
+
+figure(21)
+set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.8]);
+subplot(1,1,1)
+plot(V_SampleTime,V_SampleLongAccel,'color',GP(9,:),'linewidth',5);
+hold on;
+area(V_TimingParameters_t,V_Accel_Timing,'FaceColor',PP(4,:),'EdgeColor',PP(4,:),'linewidth',2,'linestyle',':','FaceAlpha',0.3);
+
+
+title('Longitudinal Acceleration (ValidationSet)','fontsize',FontSize);
+grid on;
+xlabel('Roadway position [m]','fontsize',FontSize);
+ylabel('Acceleration [m/s^2]','fontsize',FontSize);
+
+
+%%
+% %%
+% pltIndxRoad = 1 : length(flt_curvature);
+% pltIndxRoad = Sampling*pltIndxRoad;
+% xlimIndex=[4850,5300];
+% xlimIndex=[6700,7400];
+% xlimIndex=[0,22000];
+% % xlimIndex=[0,22000];
+% FontSize = 13;
+% figure(18)
+% set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 0.4 0.95]);
+% subplot(4,1,1)
+% plot(pltIndxRoad,sn_Ego_Accel,'color',YP(9,:),'linewidth',2);
+% hold on;
+% title('Longitudinal Acceleration','fontsize',FontSize);
+% grid on;
+% xlabel('Roadway position [m]','fontsize',FontSize);
+% ylabel('Acceleration [m/s^2]','fontsize',FontSize);
+% xlim(xlimIndex);
+% subplot(4,1,2)
+% plot(pltIndxRoad,sn_Lat_Accel,'color',YP(5,:),'linewidth',2);
+% hold on;
+% title('Lateral Acceleration','fontsize',FontSize);
+% grid on;
+% xlabel('Roadway position [m]','fontsize',FontSize);
+% ylabel('Acceleration [m/s^2]','fontsize',FontSize);
+% xlim(xlimIndex);
+% subplot(4,1,3)
+% plot(pltIndxRoad,sn_Ego_Velocity,'color',RP(9,:),'linewidth',2);
+% hold on;
+% title('Speed','fontsize',FontSize);
+% grid on;
+% xlabel('Roadway position [m]','fontsize',FontSize);
+% ylabel('Speed [km/h]','fontsize',FontSize);
+% xlim(xlimIndex);
+% subplot(4,1,4)
+% plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./Radius,'color',CP(26,:),'linewidth',2);
+% % hold on;
+% % plot(pltIndxRoad(2:length(pltIndxRoad)-1),1./HC_flt_radius,'g*','linewidth',4);
+% % hold off;
+% title('Curvature','fontsize',FontSize);
+% grid on;
+% % ylim([0,200]);
+% xlabel('Roadway position [m]','fontsize',FontSize);
+% ylabel('1/Radius [1/m]','fontsize',FontSize);
+% xlim(xlimIndex);
+% 
+% 
+% %%
+% Radius_revised = [10000, Radius, 10000];
+% 
+% Cal_LateralAcceleration = (sn_Ego_Velocity/3.6).^2 ./ Radius_revised;
+% 
+% 
+% figure(19)
+% set(gcf, 'color','w','Units', 'Normalized', 'OuterPosition', [0 0.05 1 0.8]);
+% 
+% plot(Cal_LateralAcceleration,'color',CP(26,:),'linewidth',2);
+% hold on;
+% plot(sn_Lat_Accel,'color',CP(6,:),'linewidth',2);
+% grid on;
+% legend('Calculated Lateral Accel','Measured Lateral Accel');
+% title('Comparison calculation with measurement');
+% 
+% 
