@@ -5,7 +5,7 @@ Created on Wed May 16 09:44:05 2018
 @author: Kyunghan
 @vehicle simulation model
 """
-from math import pi, sin, cos
+from math import pi, sin, cos, sqrt, acos, atan
 import numpy as np
 from scipy.spatial import distance as dist_calc
 import scipy.io as io
@@ -74,6 +74,40 @@ def Filt_MovAvg(Data, odd_filt_num):
         for i in range(tmpFiltNum_c,len(Data),1):
             Data_FiltOut[i] = np.mean(Data[i-tmpFiltNum_c:i-tmpFiltNum_c+odd_filt_num])
     return Data_FiltOut
+
+#3. Projection distance calculation
+def Calc_PrDis(Data_Array_x, Data_Array_y, Current_point):
+    dis_array = np.sqrt(np.square(Data_Array_x - Current_point[0]) + np.square(Data_Array_y - Current_point[1]))    
+    min_index = np.argmin(dis_array)    
+    tmp_c = dis_array[min_index]
+    
+    if dis_array[min_index-1] <= dis_array[min_index+1]:
+        tmp_b = dis_array[min_index-1]
+        tmp_a = dist_calc.euclidean([Data_Array_x[min_index], Data_Array_y[min_index]], [Data_Array_x[min_index-1], Data_Array_y[min_index-1]])
+        road_an = atan((Data_Array_y[min_index] - Data_Array_y[min_index-1])/(Data_Array_x[min_index] - Data_Array_x[min_index-1]))
+        veh_an = atan((Current_point[1]-Data_Array_y[min_index-1])/(Current_point[0]-Data_Array_x[min_index-1]))
+    else:
+        tmp_b = dis_array[min_index+1]
+        tmp_a = dist_calc.euclidean([Data_Array_x[min_index], Data_Array_y[min_index]], [Data_Array_x[min_index+1], Data_Array_y[min_index+1]])
+        road_an = atan((Data_Array_y[min_index+1] - Data_Array_y[min_index])/(Data_Array_x[min_index+1] - Data_Array_x[min_index]))
+        veh_an = atan((Current_point[1]-Data_Array_y[min_index])/(Current_point[0]-Data_Array_x[min_index]))
+    if (tmp_a**2 + tmp_c**2 - tmp_b**2)/(2*tmp_a*tmp_c) >= 1:
+        tmp_dem = 1
+    elif (tmp_a**2 + tmp_c**2 - tmp_b**2)/(2*tmp_a*tmp_c) <= -1:
+        tmp_dem = -1
+    else:
+        tmp_dem = (tmp_a**2 + tmp_c**2 - tmp_b**2)/(2*tmp_a*tmp_c)
+            
+    if tmp_c == 0:
+        tmp_An = 0
+    else:
+        tmp_An = acos(tmp_dem)
+    tmp_n = sin(tmp_An)*tmp_c
+    if veh_an >= road_an:
+        tmp_dir = 'Right'
+    else:
+        tmp_dir = 'Left'            
+    return tmp_n, tmp_dir
 #%% 0. type definition
 
 class type_pid_controller:
@@ -364,8 +398,8 @@ class Mod_Behavior:
         self.u_brk = brk_out
         return [acc_out, brk_out]
     
-    def Lat_control(self,lane_offset):
-        steer_out = self.Lat_Controller.Control(0,lane_offset)
+    def Lat_control(self,lane_offset, offset_des = 0):
+        steer_out = self.Lat_Controller.Control(offset_des,lane_offset)
         self.u_steer = steer_out
         return steer_out
     
@@ -381,18 +415,6 @@ class Mod_Behavior:
         self.conf_forecast_dis = forecast_dis
         self.conf_cf_dis = cf_dis            
         self.conf_lat_off = lat_off
-        
-    def Lateral_state_recog(self, veh_position_x, veh_position_y, veh_ang, road_x, road_y, road_ang):
-        stLateral = type_drvstate()
-        lat_offset = dist_calc.euclidean([veh_position_x, road_x],[veh_position_y, road_y])
-        if lat_offset <= self.conf_lat_off:
-            stLateral.set_state('None','None',0)
-        else:
-            if veh_ang>=road_ang:
-                stLateral.set_state('TurnRight',veh_ang-road_ang,lat_offset)
-            else:
-                stLateral.set_state('TurnLeft',veh_ang-road_ang,lat_offset)    
-        return stLateral
          
     def Static_state_recog(self,static_obj_in, veh_position_s, road_len):
         # Define local state and objectives
@@ -472,14 +494,25 @@ class Mod_Behavior:
         [self.acc_out, self.brk_out] = self.Lon_control(self,veh_speed_set,veh_vel)
         return [self.acc_out, self.brk_out]
     
-    def Lat_behavior(self, veh_position_x, veh_position_y, veh_ang, road_x, road_y, road_ang):
-        self.stLateral = self.Lateral_state_recog(veh_position_x, veh_position_y, veh_ang, road_x, road_y, road_ang)
-        if self.stLateral.state == 'TurnRight':
-            Lane_offset = -self.stLateral.state_param
+    def Lat_behavior(self, veh_position_x, veh_position_y, road_x, road_y):
+        self.stLateral = self.Lateral_state_recog(veh_position_x, veh_position_y, road_x, road_y)
+        if self.stLateral.state == 'Right':
+            Lane_offset = self.stLateral.state_reldis
         else:
-            Lane_offset = self.stLateral.state_param        
-        self.steer_out = self.Lat_control(Lane_offset)
-        return self.steer_out
+            Lane_offset = -self.stLateral.state_reldis
+        self.lane_offset = Lane_offset
+        self.steer_out = self.Lat_control(Lane_offset)        
+        return self.steer_out    
+            
+    def Lateral_state_recog(self, veh_position_x, veh_position_y, road_x, road_y):
+        stLateral = type_drvstate()
+        [lat_offset, direction] = Calc_PrDis(road_x, road_y, [veh_position_x, veh_position_y])
+        stLateral.set_state(direction,'None',lat_offset)  
+#        if lat_offset <= abs(self.conf_lat_off):
+#            stLateral.set_state('None','None',0)
+#        else:
+#            stLateral.set_state(direction,'None',lat_offset)          
+        return stLateral
 #%% 3. Environment model
     # Road, static objects
 class Mod_Env:    
@@ -691,3 +724,158 @@ if __name__ == "__main__":
         old_pos = [X_in[i-1],Y_in[i-1]]
         new_pos = [X_in[i],Y_in[i]]
         S_Py[i] = S_Py[i-1] + dist_calc.euclidean(old_pos, new_pos)
+#%%
+    road_x = np.arange(1,2000,10)        
+    road_y = 100*np.ones(len(road_x))
+    plt.plot(road_x, road_y)
+    
+    veh_x = np.arange(3,2000,10)        
+    veh_y = 100*np.ones(len(veh_x))
+    y_sin = 10*np.sin(np.arange(0,20,0.2))
+    veh_y[100:] = 95+y_sin
+            
+    en_test = Mod_Env(road_x,road_y)
+    dis_list = []
+    dir_list = []
+    veh_an = []
+    road_an = []
+    #%%
+RoadData = io.loadmat('road_data_amsa.mat')
+ # Powertrain import and configuration
+kona_power = Mod_PowerTrain()
+# ~~~~~
+# Bodymodel import and configuration
+kona_body = Mod_Body()
+kona_body.conf_veh_len = 1
+# ~~~~
+# Vehicle set
+kona_vehicle = Mod_Veh(kona_power, kona_body)
+# ~~~~
+# Driver model
+drv_kyunghan = Mod_Driver()
+# ~~~~
+# Behavior model
+beh_steer = Mod_Behavior(drv_kyunghan)
+# Road model
+#road_x = np.arange(1,4000,1)        
+#road_sin = 100 + 30*np.sin(np.arange(0, len(road_x)*0.8*0.003, 0.003))
+#road_y = np.concatenate((100*np.ones(int(len(road_x)*0.2)), road_sin))
+road_x = RoadData['sn_X']
+road_y = RoadData['sn_Y']
+# 4.2 Simulation config
+Ts = 0.01
+sim_time = 20
+sim_time_range = np.arange(0,sim_time,0.01)
+veh_vel = 0 # Initial vehicle speed
+kona_vehicle.Set_initState(x_veh = road_x[2], y_veh = road_y[2], psi_veh = atan((road_y[2] - road_y[1]))/(road_x[2] - road_x[1]))
+u_speed_val = np.concatenate((0 * np.ones(int(len(sim_time_range)*0.1)), 10 * np.ones(int(len(sim_time_range)*0.9))))
+
+# ----------------------------- select input set ---------------------------
+Input_index = 3
+if Input_index == 0:
+    # Driver = normal
+    drv_kyunghan.set_char('Normal')
+    beh_steer.Drver_set(drv_kyunghan)
+elif Input_index == 1:
+    # Driver = aggressive
+    drv_kyunghan.set_char('Aggressive')
+    beh_steer.Drver_set(drv_kyunghan)
+elif Input_index == 2:
+    # Driver = defensive
+    drv_kyunghan.set_char('Defensive')
+    beh_steer.Drver_set(drv_kyunghan)
+elif Input_index == 3:
+    # Driver = new driver with config parameter
+    drv_kyuhwan = Mod_Driver()
+    drv_kyuhwan.P_gain_lon = 0.2
+    drv_kyuhwan.I_gain_lon = 0.05
+    drv_kyuhwan.I_gain_lat = 0
+    drv_kyuhwan.P_gain_lat = 0
+    beh_steer.Drver_set(drv_kyuhwan)
+else:
+    print('입력을 똑바로 하세요 ~_~')
+    
+# 4.3 Simulation
+# Set logging data
+sim4 = type_DataLog(['Veh_Vel','Acc_in','Brk_in','Trq_set','Steer_in','Wheel_theta','LaneOff'])
+sim4_veh = type_DataLog(['PosX','PosY'])
+
+for sim_step in range(len(sim_time_range)):        
+    # Arrange vehicle position
+    pos_x = kona_vehicle.pos_x_veh
+    pos_y = kona_vehicle.pos_y_veh
+    # Arrange behavior input
+    u_speed_set = u_speed_val[sim_step]    
+    # Behavior control    
+    [u_acc_in, u_brk_in] = beh_steer.Lon_control(u_speed_set, veh_vel)
+    u_steer_in = beh_steer.Lat_behavior(pos_x,pos_y,road_x,road_y)     
+    # Vehicle model sim
+    [veh_vel, the_wheel] = kona_vehicle.Veh_driven(u_acc = u_acc_in, u_brake = u_brk_in, u_steer = u_steer_in)
+    [pos_x, pos_y, pos_s, pos_n, psi_veh] = kona_vehicle.Veh_position_update(veh_vel, the_wheel)       
+    # Store data
+    sim4.StoreData([veh_vel, u_acc_in, u_brk_in, kona_vehicle.psi_veh, u_steer_in, the_wheel, beh_steer.lane_offset])
+    sim4_veh.StoreData([pos_x,pos_y])
+
+[sim4_veh_vel, sim4_u_acc, sim4_u_brk, sim4_trq_set, sim4_steer, sim4_wheel, sim4_laneoff] = sim4.get_profile_value(['Veh_Vel','Acc_in','Brk_in','Trq_set','Steer_in','Wheel_theta','LaneOff'])
+[sim4_veh_x, sim4_veh_y] = sim4_veh.get_profile_value(['PosX','PosY'])
+
+# 4.4 Reulst plot
+fig = plt.figure(figsize=(8,4))
+ax1 = plt.subplot(121)
+ax2 = plt.subplot(222)
+ax3 = plt.subplot(224)
+ax1.plot(road_x, road_y)
+ax1.plot(road_x[6442], road_y[6442],'o')
+ax1.plot(road_x[0], road_y[0],'o')
+ax1.plot(sim4_veh_x, sim4_veh_y);
+ax1.set_xlabel('X position [m]');ax1.set_ylabel('Y position [m]');ax1.axis('equal')
+ax2.plot(sim_time_range, sim4_trq_set)
+ax3.plot(sim_time_range, sim4_wheel,label = 'Wheel')
+#ax3.plot(sim_time_range, sim4_steer,label = 'Str')
+
+
+#%%
+
+Data_Array_x = road_x
+Data_Array_y = road_y
+Current_point = [pos_x, pos_y]
+
+dis_array = np.sqrt(np.square(Data_Array_x - Current_point[0]) + np.square(Data_Array_y - Current_point[1]))    
+min_index = np.argmin(dis_array)    
+tmp_c = dis_array[min_index]
+
+if dis_array[min_index-1] <= dis_array[min_index+1]:
+    tmp_b = dis_array[min_index-1]
+    tmp_a = dist_calc.euclidean([Data_Array_x[min_index], Data_Array_y[min_index]], [Data_Array_x[min_index-1], Data_Array_y[min_index-1]])
+    road_an = atan((Data_Array_y[min_index] - Data_Array_y[min_index-1])/(Data_Array_x[min_index] - Data_Array_x[min_index-1]))
+    if Data_Array_x[min_index] - Data_Array_x[min_index-1] < 0:
+        road_an = road_an + pi        
+    veh_an = atan((Current_point[1]-Data_Array_y[min_index-1])/(Current_point[0]-Data_Array_x[min_index-1]))
+    if Current_point[0] - Data_Array_x[min_index-1] < 0:
+        veh_an = veh_an + pi        
+else:
+    tmp_b = dis_array[min_index+1]
+    tmp_a = dist_calc.euclidean([Data_Array_x[min_index], Data_Array_y[min_index]], [Data_Array_x[min_index+1], Data_Array_y[min_index+1]])
+    road_an = atan((Data_Array_y[min_index+1] - Data_Array_y[min_index])/(Data_Array_x[min_index+1] - Data_Array_x[min_index]))
+    veh_an = atan((Current_point[1]-Data_Array_y[min_index])/(Current_point[0]-Data_Array_x[min_index]))
+
+if (tmp_a**2 + tmp_c**2 - tmp_b**2)/(2*tmp_a*tmp_c) >= 1:
+    tmp_dem = 1
+elif (tmp_a**2 + tmp_c**2 - tmp_b**2)/(2*tmp_a*tmp_c) <= -1:
+    tmp_dem = -1
+else:
+    tmp_dem = (tmp_a**2 + tmp_c**2 - tmp_b**2)/(2*tmp_a*tmp_c)
+    
+if tmp_c == 0:
+    tmp_An = 0
+else:
+    tmp_An = acos(tmp_dem)
+    
+tmp_n = sin(tmp_An)*tmp_c
+if veh_an >= road_an:
+    tmp_dir = 'Right'
+else:
+    tmp_dir = 'Left'            
+    
+print([tmp_dir, veh_an, road_an])
+#return tmp_n, tmp_dir
