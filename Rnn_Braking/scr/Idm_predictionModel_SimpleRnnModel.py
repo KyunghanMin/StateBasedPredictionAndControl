@@ -20,6 +20,7 @@ from sklearn.metrics import mean_squared_error
 from keras.models import Sequential, load_model
 from keras.layers import Dense
 from keras.layers import LSTM
+from keras import optimizers
 from keras import backend as K
 
 #%% Initialization Keras session
@@ -91,7 +92,9 @@ model.add(LSTM(ModelConfig_NumLstmUnit, return_sequences=True))
 model.add(LSTM(ModelConfig_NumLstmUnit))
 #model.add(LSTM(ModelConfig_NumLstmUnit))
 model.add(Dense(1, activation='relu'))
-model.compile(loss='mse', optimizer='adam')
+optimize_par = optimizers.SGD()
+model.compile(loss='mse', optimizer='SGD')
+model.optimizer.lr = 0.05
 #%% Training data set
 TrainConfig_TrainRatio = 0.8;
 TrainConfig_ValidRatio = 1 - TrainConfig_TrainRatio;
