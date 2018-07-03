@@ -23,6 +23,7 @@ from keras.layers import LSTM
 from keras import optimizers
 from keras import backend as K
 
+import lib_sbpac
 #%% Initialization Keras session
 K.clear_session()
 
