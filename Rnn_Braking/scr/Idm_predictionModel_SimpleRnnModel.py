@@ -18,15 +18,17 @@ from pathlib import Path
 from keras.utils import plot_model
 from sklearn.metrics import mean_squared_error
 from keras.models import Sequential, load_model
-from keras.layers import Dense
+from keras.layers import Dense, Reshape
 from keras.layers import LSTM
 from keras import optimizers
 from keras import backend as K
-
 import lib_sbpac
+import Idm_PredictionModel_ModelDesign_ParamOpt as OptResult
+import Idm_Lib
+import pickle
 #%% Initialization Keras session
 K.clear_session()
-
+ModelStr = OptResult.ModelStr
 #%% Declare local function
 def NormColArry(data):
     ''' Normalization of data array
@@ -44,92 +46,99 @@ def NormColArry(data):
     tmpLoc_Num_denominator = MaxVal - MinVal;    
     return tmpLoc_Arry_numerator / (tmpLoc_Num_denominator + tmpLoc_Num_NonZeroCriticValue), MaxVal, MinVal;
 #%% Import data and normalization
+    
 cdir = os.getcwd()
 data_dir = os.chdir('../data')
 
-DataLoad = scipy.io.loadmat('TestUpData.mat');
+DataLoad = scipy.io.loadmat('TestUpDataVariRan.mat');
 del DataLoad['__globals__'];del DataLoad['__header__'];del DataLoad['__version__'];
 TrainConfig_NumDataSet = DataLoad['DataLength'][0,0];
 del DataLoad['DataLength'];
 
 os.chdir(cdir)
 #%% Model configuration
-ModelConfig_NumInputSequence = 10;
-ModelConfig_NumFeature = 4;
-ModelConfig_NumLstmUnit = 50;
-ModelConfig_NumOutputSize = 1;
-ModelConfig_NumEpoch = 2;
-ModelConfig_NumBatch = 50;
+ModelConfig_NumInputSequence = ModelStr['OptPar_InputSeq']
+#ModelConfig_NumInputSequence = 10
+ModelConfig_NumStateNum =  ModelStr['OptPar_StateNum']
+#    ModelConfig_SeqAct = ModelStr['OptPar_SeqAct']
+ModelConfig_SeqAct = 'tanh'
+#    ModelConfig_RecSeqAct = ModelStr['OptPar_RecSeqAct']
+ModelConfig_RecSeqAct = 'hard_sigmoid'
+ModelConfig_DenseAct = ModelStr['OptPar_DenseAct']
+ModelConfig_Optimizer = ModelStr['OptPar_Opt']
+ModelConfig_NumFeature = 4
+ModelConfig_NumOutputSize = 1
+ModelConfig_NumBatch = ModelStr['OptPar_BatchSize']
 #%% Data arrange
-DataNum = 0;
-DataSetNum = 1;
-# Data set arrange
-DataSet_X = np.zeros((TrainConfig_NumDataSet,ModelConfig_NumInputSequence,ModelConfig_NumFeature));
-DataSet_X_Buff = np.zeros((TrainConfig_NumDataSet,ModelConfig_NumInputSequence,ModelConfig_NumFeature));
-DataSet_Y = np.zeros((TrainConfig_NumDataSet,ModelConfig_NumOutputSize));
+tmpDataSet_Y = []
+tmpDataSet_X = []
 
-# Slicing and cooking
-for key in DataLoad:
-    DataCurrent = DataLoad[key];
-    DataSize = DataCurrent.shape[0];
-    DataSetNum = DataSetNum+1;
-    DataSetNumCurr = 1;
-    for index in range(0,DataSize-10):        
-        DataSet_X[DataNum,:,:] = DataCurrent[index:index+ModelConfig_NumInputSequence,1:-1]
-        DataSet_Y[DataNum,:] = DataCurrent[index+ModelConfig_NumInputSequence,0];
-        DataNum = DataNum+1;
-        DataSetNumCurr = DataSetNumCurr + 1;    
+for key in DataLoad.keys():
+    tmpDataCurrent = DataLoad[key]
+    tmpLen = np.shape(tmpDataCurrent)[0]
+    tmpEndPoint = tmpLen + ModelConfig_NumInputSequence - tmpLen%ModelConfig_NumInputSequence
+    DataCurrent = np.zeros((tmpEndPoint,6))
+    DataCurrent[:tmpLen,:] = tmpDataCurrent
+    DataCurrent[tmpLen:,:] = tmpDataCurrent[tmpLen-1,:]
+    DataSize = DataCurrent.shape[0]
+    for index in range(0,DataSize-ModelConfig_NumInputSequence):        
+        tmpDataSet_X.append(DataCurrent[index:index+ModelConfig_NumInputSequence,1:-1])
+        tmpDataSet_Y.append(DataCurrent[index+ModelConfig_NumInputSequence,0])            
+    del tmpDataCurrent   
+    
+DataSet_X = np.array(tmpDataSet_X); del tmpDataSet_X
+DataSet_Y = np.array(tmpDataSet_Y); del tmpDataSet_Y
+    
+    
+[DataSet_X_Norm, Data_X_Max, Data_X_Min] = Idm_Lib.NormColArry(DataSet_X)
+[DataSet_Y_Norm, Data_Y_Max, Data_Y_Min] = Idm_Lib.NormColArry(DataSet_Y)
 
-#%% Design model
-# Model structure - Reccurent neural network
-# Input layer - LSTM (Output size = 100, Input size = (10,4))
-#             - 1 second sequential data
-#             - Inputs: Acceleration, Velocity, Distance
-# Hidden layer - LSTM (Output size = 50)
-# Output layer - Softmax activation (Output size = 1)
+TrainConfig_TrainRatio = 0.8
+tmp_DataLen = np.shape(DataSet_X_Norm)[0]
+data_list = list(range(tmp_DataLen))
+data_list_ran = random.shuffle(data_list)
+tmp_lstTrainSet = data_list[0:int(tmp_DataLen*TrainConfig_TrainRatio)]
+tmp_lstValidSet = data_list[int(tmp_DataLen*TrainConfig_TrainRatio):] 
+
+x_train = DataSet_X_Norm[tmp_lstTrainSet,:,:];
+y_train = DataSet_Y_Norm[tmp_lstTrainSet];
+
+x_valid = DataSet_X_Norm[tmp_lstValidSet,:,:];
+y_valid = DataSet_Y_Norm[tmp_lstValidSet];
+
+DataNorm_Den = Data_X_Max - Data_X_Min
+#%% Model structing    
+ModelConfig_NumFeature = 4
 model = Sequential()
-model.add(LSTM(ModelConfig_NumLstmUnit, return_sequences=True,input_shape=(ModelConfig_NumInputSequence,ModelConfig_NumFeature)))
-model.add(LSTM(ModelConfig_NumLstmUnit, return_sequences=True))
-model.add(LSTM(ModelConfig_NumLstmUnit))
-#model.add(LSTM(ModelConfig_NumLstmUnit))
-model.add(Dense(1, activation='relu'))
-optimize_par = optimizers.SGD()
-model.compile(loss='mse', optimizer='SGD')
-model.optimizer.lr = 0.05
-#%% Training data set
-TrainConfig_TrainRatio = 0.8;
-TrainConfig_ValidRatio = 1 - TrainConfig_TrainRatio;
-TrainConfig_NumTrainSet = int(DataNum*TrainConfig_TrainRatio);
-TrainConfig_DataSetList = list(range(DataNum))
-TrainConfig_TrainSetList = TrainConfig_DataSetList[0:TrainConfig_NumTrainSet];
-TrainConfig_ValidSetList = TrainConfig_DataSetList[TrainConfig_NumTrainSet:];
-
-[DataSet_X_Norm, DataSet_X_Max, DataSet_X_Min]= NormColArry(DataSet_X);
-[DataSet_Y_Norm, DataSet_Y_Max, DataSet_Y_Min]= NormColArry(DataSet_Y);
-DataNorm_Den = DataSet_X_Max-DataSet_X_Min;
-
-x_train = DataSet_X_Norm[TrainConfig_TrainSetList,:,:];
-y_train = DataSet_Y_Norm[TrainConfig_TrainSetList,:];
-
-x_valid = DataSet_X_Norm[TrainConfig_ValidSetList,:,:];
-y_valid = DataSet_Y_Norm[TrainConfig_ValidSetList,:];
+ModSeq1 = LSTM(ModelConfig_NumStateNum, activation=ModelConfig_SeqAct, recurrent_activation = ModelConfig_RecSeqAct, return_sequences=True,input_shape=(ModelConfig_NumInputSequence,ModelConfig_NumFeature))
+model.add(ModSeq1)
+ModDens1 = Dense(1, activation=ModelConfig_DenseAct,input_shape=(ModelConfig_NumInputSequence,ModelConfig_NumStateNum))
+model.add(ModDens1)
+ModReshape1 = Reshape((ModelConfig_NumInputSequence,))
+model.add(ModReshape1)
+ModDens2 = Dense(1, activation=ModelConfig_DenseAct,input_shape=(1,ModelConfig_NumInputSequence))
+model.add(ModDens2)
+model.compile(loss='mse', optimizer=ModelConfig_Optimizer)  
 #%% Fit network
-
+#
 model.fit(x_train, y_train,
-          batch_size=ModelConfig_NumBatch, epochs=20, shuffle=True,
+          batch_size=ModelConfig_NumBatch, epochs = 60, shuffle=True,
           validation_data=(x_valid, y_valid))    
-#%% Save model
 model.save('RnnBraking_4dim')
+#%% load model
+#model = load_model('RnnBraking_4dim')
 #%% Prediction
 y_pre = model.predict(x_valid)
 
-plt.figure
+plt.figure()
 plt.plot(y_pre);
 plt.plot(y_valid);
 plt.show()
 #%% Model validation for test case
-ValidKeyList = random.sample(DataLoad.keys(),1)
+#ValidKeyList = random.sample(DataLoad.keys(),1)
+ValidKeyList = DataLoad.keys()
 
+PredictionResult = {}
 for i in ValidKeyList:    
 #    i = ValidKeyList[1];
     # Load validation case
@@ -139,39 +148,40 @@ for i in ValidKeyList:
     PredictionRange = len(ValidDataSet) - ModelConfig_NumInputSequence;
     ValidDataSetCalc = np.zeros((ModelConfig_NumInputSequence,ModelConfig_NumFeature))
     # Set the first input (input_sequence, input_feature)
-    ValidDataSetCalc[:,0:3] = ValidDataSet[:ModelConfig_NumInputSequence,0:3]    
+    ValidDataSetCalc[:,0:4] = ValidDataSet[:ModelConfig_NumInputSequence,0:4]    
         # Calculate reference acceleration
     ValidDataSetCalc[:,2] = -0.5*ValidDataSetCalc[:,0]*ValidDataSetCalc[:,0]/ValidDataSetCalc[:,1]    
     # Normalize sequence data
-    ValidDataSetNorm = (ValidDataSetCalc - DataSet_X_Min)/DataNorm_Den
+    ValidDataSetNorm = (ValidDataSetCalc - Data_X_Min)/DataNorm_Den
     ValidDataSet_X = np.array([ValidDataSetNorm])
     # Predict array for prediction data storage
     PredictArry  = np.zeros([PredictionRange,ModelConfig_NumFeature+1])   
     for j in range(PredictionRange):
         # Calculate predicted acceleration
         Predict_Value = model.predict(ValidDataSet_X)
-        Predict_Acc = Predict_Value*(DataSet_Y_Max - DataSet_Y_Min) + DataSet_Y_Min
+        Predict_Acc = Predict_Value*(Data_Y_Max - Data_Y_Min) + Data_Y_Min
         # Calculate next input variables
             # Predicted velocity [0]
-        Predict_Vel = ValidDataSet_X[0,-1,0]*DataNorm_Den[0] + DataSet_X_Min[0] + Predict_Acc*0.1;
+        Predict_Vel = ValidDataSet_X[0,-1,0]*DataNorm_Den[0] + Data_X_Min[0] + Predict_Acc*0.1;
         if Predict_Vel <= 0.1:
             Predict_Vel = 0.1        
             # Predicted distance [1]
-        Predict_Dis = ValidDataSet_X[0,-1,1]*DataNorm_Den[1] + DataSet_X_Min[1] - Predict_Vel*0.1;
+        Predict_Dis = ValidDataSet_X[0,-1,1]*DataNorm_Den[1] + Data_X_Min[1] - Predict_Vel*0.1;
         if Predict_Dis <= 0.5:
             Predict_Dis = 0.5
             # Predicted reference acceleration [2]
         Predict_AccRef = -0.5*Predict_Vel*Predict_Vel/Predict_Dis;        
             # Process time [3]
-        Predict_Time = ValidDataSet_X[0,-1,3]*DataNorm_Den[3] + DataSet_X_Min[3] + 0.1;
+        Predict_Time = ValidDataSet_X[0,-1,3]*DataNorm_Den[3] + Data_X_Min[3] + 0.1;
         # Storage predicted results
         PredictArry[j,:] = np.resize(np.array([Predict_Acc,Predict_Vel,Predict_Dis,Predict_AccRef,Predict_Time]),ModelConfig_NumFeature+1);
         # Arrange model input using predicted results
         tmpValidSetPred = np.array([Predict_Vel,Predict_Dis,Predict_AccRef,Predict_Time])
-        tmpValidSetPredNorm = (tmpValidSetPred - DataSet_X_Min)/DataNorm_Den;
+        tmpValidSetPredNorm = (tmpValidSetPred - Data_X_Min)/DataNorm_Den;
         ValidDataSet_X[0,0:-1,:] = ValidDataSet_X[0,1:ModelConfig_NumInputSequence,:];
         ValidDataSet_X[:,-1] = np.array([[tmpValidSetPredNorm]])
-
+    PredictionResult[i] = PredictArry
+    
 plt.close("all")
 #tmpAccRef = -0.5*ValidDataSet[ModelConfig_NumInputSequence:-1,0]*ValidDataSet[ModelConfig_NumInputSequence:-1,0]/(ValidDataSet[ModelConfig_NumInputSequence-1:0,1] + 0.5);
 plt.figure(1)        
@@ -182,6 +192,10 @@ plt.plot(ValidDataSet[ModelConfig_NumInputSequence:-1,2], label = 'AccRef')
 plt.plot(ValidDataSet_Y[ModelConfig_NumInputSequence:-1], label = 'Acc')
 plt.legend()
 plt.show()
+#%%
+with open('PredictionResult.pickle','wb') as mysavedata:
+     pickle.dump(PredictionResult,mysavedata)   
+     mysavedata.close()
 #%% Plot prediction result
 plt.close("all")
 #tmpAccRef = -0.5*ValidDataSet[ModelConfig_NumInputSequence:-1,0]*ValidDataSet[ModelConfig_NumInputSequence:-1,0]/(ValidDataSet[ModelConfig_NumInputSequence-1:0,1] + 0.5);
@@ -189,8 +203,8 @@ plt.figure(1)
 plt.plot(PredictArry[:,0], label = 'AccPredic')    
 plt.plot(PredictArry[:,3], label = 'AccRefPredic')
 #plt.plot(tmpAccRef)
-plt.plot(ValidDataSet[ModelConfig_NumInputSequence:-1,3], label = 'AccRef')
-plt.plot(ValidDataSet_Y[ModelConfig_NumInputSequence:-1], label = 'Acc')
+plt.plot(ValidDataSet[ModelConfig_NumInputSequence:-1,2], label = 'AccRef')
+plt.plot(ValidDataSet_Y[ModelConfig_NumInputSequence:-1],'--', label = 'Acc')
 plt.legend()
 plt.show()
 

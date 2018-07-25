@@ -39,8 +39,13 @@ def RefCalc(data):
     LocVelRef = LocVel/np.power(tmpAcc,0.25)
     LocVelDiff = LocVel - LocVelRef
     Param_MaxPoint = np.argmax(LocVelDiff)
-    ParamAccRat_MaxPoint = LocAcc[Param_MaxPoint]/LocAccRef[Param_MaxPoint]
-    return Param_MaxAcc, ParamAccRat_MaxPoint, Param_MaxPoint
+    Param_AccMaxPoint = LocAcc[Param_MaxPoint]
+    Param_AccMaxDiff = Param_AccMaxPoint - LocAccRef[Param_MaxPoint]
+    Param_Slope = (LocAcc[Param_MaxPoint] - LocAcc[0])/Param_MaxPoint
+    Param_AccDiff = LocAcc[0] - LocAccRef[0]
+    ParamOut = {'Par_MaxPoint':Param_MaxPoint,'Par_Slope':Param_Slope,'Par_AccDiff':Param_AccDiff,
+                'Par_MaxAcc':Param_MaxAcc,'Par_AccMaxPt':Param_AccMaxPoint, 'Par_AccMaxDiff':Param_AccMaxDiff}
+    return ParamOut, LocVelRef, LocVelDiff
 #%% Calculate corr-coef (vector)
 def CorCalc(vec_1,vec_2):
     tmpCorrMatrx = np.corrcoef(vec_1,vec_2)
